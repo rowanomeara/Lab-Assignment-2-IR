@@ -7,7 +7,7 @@ from ir_support.robots.UTSMeshRobot import UTSMeshRobot
 class DoosanM0609(UTSMeshRobot):
     """Doosan Robotics M0609 6-DOF Collaborative Robot Arm."""
 
-    def __init__(self, base=None):
+    def __init__(self, base=None, mesh_dir=None):
         # Define the standard DH parameters [d, a, alpha, offset] and joint limits [qlim]
         links = [
             rtb.RevoluteDH(d=0.135, a=0.0,   alpha=pi / 2,  qlim=[-2 * pi, 2 * pi]),
@@ -18,9 +18,34 @@ class DoosanM0609(UTSMeshRobot):
             rtb.RevoluteDH(d=0.121, a=0.0,   alpha=0.0,     qlim=[-2 * pi, 2 * pi]),
         ]
 
-        mesh_dir = os.path.abspath(os.path.dirname(__file__))
-        if not os.path.exists(os.path.join(mesh_dir, "DoosanM0609Link0.dae")):
-            mesh_dir = os.path.join(mesh_dir, "DoosanM0609")
+        if mesh_dir is None:
+            script_dir = os.path.abspath(os.path.dirname(__file__))
+            repo_root = os.path.abspath(os.path.join(script_dir, ".."))
+            candidate_dirs = [
+                os.path.join(repo_root, "DoosanM0609Links"),
+                os.path.join(script_dir, "DoosanM0609Links"),
+                os.path.join(repo_root, "DoosanM0609Links", "DoosanM0609"),
+                os.path.join(script_dir, "DoosanM0609"),
+                os.path.join(repo_root, "DoosanM0609"),
+                script_dir,
+            ]
+            
+            # Check explicit candidates first
+            for d in candidate_dirs:
+                if os.path.exists(os.path.join(d, "DoosanM0609Link0.dae")):
+                    mesh_dir = os.path.abspath(d)
+                    break
+
+            # Fallback: search repo root recursively if moved anywhere else
+            if mesh_dir is None:
+                for root, _, files in os.walk(repo_root):
+                    if "DoosanM0609Link0.dae" in files:
+                        mesh_dir = root
+                        break
+
+            # Last resort
+            if mesh_dir is None:
+                mesh_dir = script_dir
 
         super().__init__(
             links=links,
@@ -32,15 +57,16 @@ class DoosanM0609(UTSMeshRobot):
         )
 
 
-import swift
-from spatialmath import SE3
+if __name__ == "__main__":
+    import swift
+    from spatialmath import SE3
 
-env = swift.Swift()
-env.launch(realtime=True)
+    env = swift.Swift()
+    env.launch(realtime=True)
 
-# Instantiate and add robot to Swift environment
-robot = DoosanM0609(base=SE3(0, 0, 0))
-robot.add_to_env(env)
+    # Instantiate and add robot to Swift environment
+    robot = DoosanM0609(base=SE3(0, 0, 0))
+    robot.add_to_env(env)
 
-# Verify motion
-robot.test()
+    # Verify motion
+    robot.test()
