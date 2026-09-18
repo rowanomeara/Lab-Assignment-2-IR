@@ -86,7 +86,7 @@ class ABB_IRB120(DHRobot):
 
 if __name__ == "__main__":
     robot = ABB_IRB120()
-    print("Perfect Pure DH Model Built!")
+    print("DH Model Built")
     
     import swift
     env = swift.Swift()
