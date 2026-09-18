@@ -1,5 +1,0 @@
-roboticstoolbox-python
-swift-sim
-spatialmath-python
-spatialgeometry
-numpy
