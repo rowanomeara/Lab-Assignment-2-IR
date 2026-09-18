@@ -4,20 +4,14 @@ from roboticstoolbox import DHRobot, DHLink, BaseRobot
 from spatialgeometry import Mesh
 from spatialmath import SE3
 import os
-#bah
+#blah
+
 class ABB_IRB120(DHRobot):
     def __init__(self):
         links = [
             DHLink(d=0.290, a=0.0,   alpha=-pi/2, offset=0.0,    qlim=[-165*pi/180, 165*pi/180]),
             DHLink(d=0.0,   a=0.270, alpha=0.0,   offset=-pi/2,  qlim=[-110*pi/180, 110*pi/180]),
             DHLink(d=0.0,   a=0.070, alpha=-pi/2, offset=0.0,    qlim=[-110*pi/180,  70*pi/180]),
-         
-         
-         
-         
-         #blahgh
-         
-         
          
          
             DHLink(d=0.302, a=0.0,   alpha=pi/2,  offset=0.0,    qlim=[-160*pi/180, 160*pi/180]),
