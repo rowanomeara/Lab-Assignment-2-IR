@@ -48,6 +48,30 @@ class AutomatedCafe:
         self.coffee_machine = Mesh(machine_path, color=[0.2, 0.2, 0.2, 1.0])
         self.coffee_machine.T = SE3(0.3, 0.6, 0.97)*SE3.Rx(pi/2) 
         self.env.add(self.coffee_machine)
+        
+        # Coffee Cup
+        cup_path = os.path.join(base_path, "Workcell meshes", "Coffee Cup", "Coffee+Cup.stl")
+        self.cup = Mesh(cup_path, color=[0.9, 0.9, 0.9, 1.0], scale=[0.05, 0.05, 0.05])
+        self.cup.T = SE3(0.2, 0.4, 0.97) 
+        self.env.add(self.cup)
+        
+        # Milk Jug 
+        jug_path = os.path.join(base_path, "Workcell meshes", "Milk Pouring Jug.stl")
+        self.jug = Mesh(jug_path, color=[0.7, 0.7, 0.75, 1.0])
+        self.jug.T = SE3(0.4, 0.5, 0.97)
+        self.env.add(self.jug)
+        
+        # Service Bell 
+        bell_path = os.path.join(base_path, "Workcell meshes", "Service Bell", "Table_Bell.stl")
+        self.bell = Mesh(bell_path, color=[0.8, 0.6, 0.1, 1.0])
+        self.bell.T = SE3(-0.3, 0.2, 0.97)
+        self.env.add(self.bell)
+        
+        # Cash Register
+        register_path = os.path.join(base_path, "Workcell meshes", "Cash Register", "registermachine.stl")
+        self.register = Mesh(register_path, color=[0.3, 0.3, 0.3, 1.0])
+        self.register.T = SE3(-0.5, 0.3, 0.97) * SE3.Rz(pi/2)
+        self.env.add(self.register)
 
 
     def run(self):
