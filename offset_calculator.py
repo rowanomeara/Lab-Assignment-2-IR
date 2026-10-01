@@ -55,17 +55,42 @@ T_cad = [
 
 # CALCULATE THE OFFSETS
 
-T_dh_global = SE3()
-for i in range(6):
-    
-    T_dh_global = T_dh_global * dh_robot.links[i].A(0)
-    
-    # Offset = Inverse(DH_Frame) * CAD_Frame)
-    T_offset = T_dh_global.inv() * T_cad[i]
-    
-    print(f"OFFSET FOR LINK {i+1}:")
-    print("np.array([")
-    for row in T_offset.A:
-        row_clean = [round(val, 5) if abs(val) > 1e-10 else 0.0 for val in row]
-        print(f"    {row_clean},")
-    print("]),\n")
+def calculate_offsets(robot_name, dh_links, T_cad):
+    print(f"========================================")
+    print(f" OFFSETS FOR {robot_name}")
+    print(f"========================================")
+    robot = DHRobot(dh_links)
+    T_dh_global = SE3()
+    for i in range(len(dh_links)):
+        T_dh_global = T_dh_global * robot.links[i].A(0)
+        # Offset = Inverse(DH_Frame) * CAD_Frame
+        T_offset = T_dh_global.inv() * T_cad[i]
+        print(f"OFFSET FOR LINK {i+1}:")
+        print("np.array([")
+        for row in T_offset.A:
+            row_clean = [round(val, 5) if abs(val) > 1e-10 else 0.0 for val in row]
+            print(f"    {row_clean},")
+        print("]),\n")
+
+if __name__ == "__main__":
+    # Rowan's ABB IRB 120
+    calculate_offsets("ABB IRB 120", dh_links, T_cad)
+
+    # Jonas's Doosan M0609
+    doosan_dh = [
+        DHLink(d=0.1525, a=0.0,   alpha=pi/2,  offset=0.0),
+        DHLink(d=0.0,    a=0.411, alpha=0.0,   offset=pi/2),
+        DHLink(d=0.0,    a=0.0,   alpha=pi/2,  offset=pi/2),
+        DHLink(d=0.368,  a=0.0,   alpha=-pi/2, offset=0.0),
+        DHLink(d=0.0,    a=0.0,   alpha=pi/2,  offset=pi),
+        DHLink(d=0.121,  a=0.0,   alpha=0.0,   offset=0.0)
+    ]
+    T0 = SE3()
+    T1 = T0 * SE3(0, 0, 0.1525)
+    T2 = T1 * SE3(0, 0.006, 0) * SE3.Rz(-pi/2) * SE3.Ry(-pi/2)
+    T3 = T2 * SE3(0.411, 0, 0) * SE3.Rz(pi/2)
+    T4 = T3 * SE3(0, -0.368, 0) * SE3.Rx(pi/2)
+    T5 = T4 * SE3(0, 0, 0) * SE3.Rx(-pi/2)
+    T6 = T5 * SE3(0, -0.121, 0) * SE3.Rx(pi/2)
+    doosan_cad = [T1, T2, T3, T4, T5, T6]
+    calculate_offsets("Doosan M0609", doosan_dh, doosan_cad)
