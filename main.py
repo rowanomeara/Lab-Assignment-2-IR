@@ -18,8 +18,8 @@ class AutomatedCafe:
         
         self.barista = ABB_IRB120()
 
-        #self.baker = Jonas?
-        #self.dispatcher = Lachlan?
+        #self.baker = Jonas?a
+        #self.dispatcher = Laclan's tx60
         
         self._setup_workcell()
         
