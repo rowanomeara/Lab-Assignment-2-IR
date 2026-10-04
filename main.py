@@ -29,8 +29,8 @@ class AutomatedCafe:
         """
         
         #Barista Robot
-        self.barista.base = SE3(-0.4, 0.2, 0.97)
-        self.barista.base_link_mesh.T = SE3(-0.4, 0.2, 0.97)
+        self.barista.base = SE3(-0.5, 0.2, 0.97)
+        self.barista.base_link_mesh.T = SE3(-0.5, 0.2, 0.97)
         self.env.add(self.barista.base_link_mesh)
         self.env.add(self.barista)
 
@@ -78,13 +78,48 @@ class AutomatedCafe:
         self.register = Mesh(register_path, color=[0.3, 0.3, 0.3, 1.0])
         self.register.T = SE3(-0.7, -0.35, 0.02) * SE3.Rz(-pi/4)
         self.env.add(self.register)
-
+        
+    def barista_move_cup(self):
+        from roboticstoolbox import jtraj
+        
+        target_pose = SE3(self.cup.T) * SE3.Rx(pi) #* SE3.Tz(0.3) * SE3.Ty(0.1)
+        hover_pose = SE3.Tz(0.3) * target_pose
+        
+        ik_hover  = self.barista.ikine_LM(hover_pose,  q0=self.barista.q)
+        ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
+        ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q)   
+        
+        traj_hover  = jtraj(self.barista.q, ik_hover.q, 50)
+        traj_target = jtraj(ik_hover.q,     ik_target.q, 30)
+        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 30)
+        
+        #Move to Hover
+        for q_step in traj_hover.q:
+            self.barista.q = q_step
+            self.env.step(0.05)
+            
+        # Lower to Cup
+        for q_step in traj_target.q:
+            self.barista.q = q_step
+            self.env.step(0.05)
+            
+        print("Cup grasped by Barista!")
+        self.cup_attached = True
+        self.cup_offset = self.barista.fkine(self.barista.q).inv() * self.cup.T
+        
+        for q_step in traj_raise.q:
+            self.barista.q = q_step
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+            self.env.step(0.05)
 
     def run(self):
         """
         Main execution loop for the cafe's logic and trajectories.
         """
         print("Cafe Simulation Running... Close browser to exit.")
+        
+        self.barista_move_cup()
         
         while True:
             self.env.step(0.05)
