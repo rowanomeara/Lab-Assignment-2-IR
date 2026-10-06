@@ -29,8 +29,8 @@ class AutomatedCafe:
         """
         
         #Barista Robot
-        self.barista.base = SE3(-0.5, 0.2, 0.97)
-        self.barista.base_link_mesh.T = SE3(-0.5, 0.2, 0.97)
+        self.barista.base = SE3(-0.35, 0.2, 0.97)
+        self.barista.base_link_mesh.T = SE3(-0.35, 0.2, 0.97)
         self.env.add(self.barista.base_link_mesh)
         self.env.add(self.barista)
 
@@ -57,7 +57,7 @@ class AutomatedCafe:
         
         # Coffee Cup
         cup_path = os.path.join(base_path, "Workcell meshes", "Coffee Cup", "Coffee+Cup.stl")
-        self.cup = Mesh(cup_path, color=[0.9, 0.9, 0.9, 1.0], scale=[0.05, 0.05, 0.05])
+        self.cup = Mesh(cup_path, color=[0.9, 0.9, 0.9, 1.0], scale=[0.04, 0.04, 0.04])
         self.cup.T = SE3(0, 0.4, 0.97) 
         self.env.add(self.cup)
         
@@ -79,11 +79,11 @@ class AutomatedCafe:
         self.register.T = SE3(-0.7, -0.35, 0.02) * SE3.Rz(-pi/4)
         self.env.add(self.register)
         
-    def barista_move_cup(self):
+    def barista_pick_up_cup(self):
         from roboticstoolbox import jtraj
         
-        target_pose = SE3(self.cup.T) * SE3.Rx(pi) #* SE3.Tz(0.3) * SE3.Ty(0.1)
-        hover_pose = SE3.Tz(0.3) * target_pose
+        target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
+        hover_pose = SE3(self.cup.T) * SE3(0.0, -0.10, 0.23) * SE3.Rx(-pi/2)
         
         ik_hover  = self.barista.ikine_LM(hover_pose,  q0=self.barista.q)
         ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
@@ -105,13 +105,50 @@ class AutomatedCafe:
             
         print("Cup grasped by Barista!")
         self.cup_attached = True
-        self.cup_offset = self.barista.fkine(self.barista.q).inv() * self.cup.T
+        self.cup_offset = self.barista.fkine(self.barista.q).inv() * SE3(self.cup.T)
         
         for q_step in traj_raise.q:
             self.barista.q = q_step
             if self.cup_attached:
                 self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
             self.env.step(0.05)
+            
+        
+    def barista_place_cup(self):
+        from roboticstoolbox import jtraj
+        
+        target_pose = SE3(0.38, 0.28, 1.09) * SE3.Rx(-pi/2)
+        hover_pose = SE3(0.38, 0.28, 1.24) * SE3.Rx(-pi/2)
+        
+        ik_hover  = self.barista.ikine_LM(hover_pose,  q0=self.barista.q, mask=[1, 1, 1, 0, 0, 0])
+        ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q, mask=[1, 1, 1, 0, 0, 0])
+        ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q, mask=[1, 1, 1, 0, 0, 0])   
+        
+        traj_hover  = jtraj(self.barista.q, ik_hover.q, 50)
+        traj_target = jtraj(ik_hover.q,     ik_target.q, 30)
+        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 30)
+        
+        #Move to Hover
+        for q_step in traj_hover.q:
+            self.barista.q = q_step
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+            self.env.step(0.05)
+            
+        # Lower to Cup
+        for q_step in traj_target.q:
+            self.barista.q = q_step
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+            self.env.step(0.05)
+            
+        print("Cup under coffee machine :)")
+        self.cup_attached = False
+        
+        for q_step in traj_raise.q:
+            self.barista.q = q_step
+            self.env.step(0.05)
+    
 
     def run(self):
         """
@@ -119,7 +156,9 @@ class AutomatedCafe:
         """
         print("Cafe Simulation Running... Close browser to exit.")
         
-        self.barista_move_cup()
+        self.barista_pick_up_cup()
+        
+        self.barista_place_cup()
         
         while True:
             self.env.step(0.05)
