@@ -89,9 +89,9 @@ class AutomatedCafe:
         ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
         ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q)   
         
-        traj_hover  = jtraj(self.barista.q, ik_hover.q, 50)
-        traj_target = jtraj(ik_hover.q,     ik_target.q, 30)
-        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 30)
+        traj_hover  = jtraj(self.barista.q, ik_hover.q, 30)
+        traj_target = jtraj(ik_hover.q,     ik_target.q, 20)
+        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 20)
         
         #Move to Hover
         for q_step in traj_hover.q:
@@ -130,7 +130,7 @@ class AutomatedCafe:
                 self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
             self.env.step(0.05)
         
-        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -15*pi/180, 15*pi/180, 0, 0, 0], 30)
+        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, 0], 30)
             
         print("Cup under coffee machine :)")
         self.cup_attached = False
@@ -148,6 +148,38 @@ class AutomatedCafe:
         self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
         self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
         self.env.add(self.coffee)
+        
+        current_pose = self.barista.fkine(self.barista.q)
+        target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
+        
+        ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
+        
+        traj_target = jtraj(self.barista.q,  ik_target.q, 30)
+            
+        for q_step in traj_target.q:
+            self.barista.q = q_step
+            self.env.step(0.05)
+        
+        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, -25*pi/180], 30)
+            
+        print("Cup under coffee machine :)")
+        self.cup_attached = True
+        
+        for q_step in traj_raise.q:
+            self.barista.q = q_step
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+                self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.env.step(0.05)
+            
+        traj_rot  = jtraj(self.barista.q,  self.barista.q + [-90*pi/180, 0, 0, 0, 0, 0], 30)
+        
+        for q_step in traj_rot.q:
+            self.barista.q = q_step
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+                self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.env.step(0.05)
  
 
     def run(self):
