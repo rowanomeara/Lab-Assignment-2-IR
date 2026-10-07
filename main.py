@@ -119,23 +119,11 @@ class AutomatedCafe:
         
         current_pose = self.barista.fkine(self.barista.q)
         target_pose = SE3(0.27, -0.28, -0.07) * current_pose
-        #hover_pose = SE3(0.38, 0.28, 1.24) * SE3.Rx(-pi/2)
         
-        #ik_hover  = self.barista.ikine_LM(hover_pose,  q0=self.barista.q, mask=[1, 1, 1, 0, 0, 0])
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
-        #ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q, mask=[1, 1, 1, 0, 0, 0])   
         
-        #traj_hover  = jtraj(self.barista.q, ik_hover.q, 50)
         traj_target = jtraj(self.barista.q,  ik_target.q, 30)
-        
-        #Move to Hover
-        #for q_step in traj_hover.q:
-        #    self.barista.q = q_step
-        #    if self.cup_attached:
-        #        self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
-        #    self.env.step(0.05)
             
-        # Lower to Cup
         for q_step in traj_target.q:
             self.barista.q = q_step
             if self.cup_attached:
@@ -150,7 +138,17 @@ class AutomatedCafe:
         for q_step in traj_raise.q:
             self.barista.q = q_step
             self.env.step(0.05)
-    
+            
+    def barista_get_coffee(self):
+        from roboticstoolbox import jtraj
+        from spatialgeometry import Cylinder
+        
+        #Coffee liquid
+        coffee_color = [0.35, 0.18, 0.05, 1.0]
+        self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
+        self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+        self.env.add(self.coffee)
+ 
 
     def run(self):
         """
@@ -161,6 +159,8 @@ class AutomatedCafe:
         self.barista_pick_up_cup()
         
         self.barista_place_cup()
+        
+        self.barista_get_coffee()
         
         while True:
             self.env.step(0.05)
