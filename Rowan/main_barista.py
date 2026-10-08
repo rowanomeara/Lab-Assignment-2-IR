@@ -6,9 +6,14 @@ from spatialmath import SE3
 from ir_support.robots import DobotMagician
 from ir_support_extra_parts.parts import part_mesh 
 import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 # Import
-from Rowan.abb_irb120 import ABB_IRB120
+from abb_irb120 import ABB_IRB120
+from Jonas.Assignment2 import DoosanM0609
 
 class AutomatedCafe:
     def __init__(self):
@@ -20,10 +25,9 @@ class AutomatedCafe:
         
         self.barista = ABB_IRB120()
         
+        self.baker = DoosanM0609()
         
-
-        #self.baker = Jonas?a
-        #self.milker = Laclan's tx60
+            #self.milker = Laclan's tx60
         
         self._setup_workcell()
         
@@ -38,6 +42,12 @@ class AutomatedCafe:
         self.env.add(self.barista.base_link_mesh)
         self.env.add(self.barista)
         
+        #Jonas's Baker Robot
+        self.baker.base = SE3(-0.25, -0.6, 0.97)
+        self.baker.base_link_mesh.T = SE3(-0.25, -0.6, 0.97)
+        self.env.add(self.baker.base_link_mesh)
+        self.env.add(self.baker)
+        
         #Dobot 
         self.dobot = DobotMagician()
         self.dobot.base = SE3(0.0, -0.5, 0.97) #* SE3.Rz(-pi/4)
@@ -45,7 +55,7 @@ class AutomatedCafe:
         
         import os
         from spatialgeometry import Box
-        base_path = os.path.dirname(os.path.abspath(__file__))
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
         #Counter Top
         counter_path = os.path.join(base_path, "Workcell meshes", "Counter", "counter.stl")
