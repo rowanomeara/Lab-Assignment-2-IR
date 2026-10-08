@@ -3,10 +3,13 @@ from math import pi
 import swift
 from spatialgeometry import Mesh
 from spatialmath import SE3
+from ir_support.robots import DobotMagician
+from ir_support_extra_parts.parts import part_mesh 
 import os
 
 # Import
 from Rowan.abb_irb120 import ABB_IRB120
+from Jonas.Assignment2 import DoosanM0609
 
 class AutomatedCafe:
     def __init__(self):
@@ -17,10 +20,10 @@ class AutomatedCafe:
         self.env.launch(realtime=True)
         
         self.barista = ABB_IRB120()
+        self.baker = DoosanM0609()
 
         #self.baker = Jonas?aa
         #self.dispatcher = Laclan's tx60
-        
         self._setup_workcell()
         
     def _setup_workcell(self):
@@ -34,6 +37,17 @@ class AutomatedCafe:
         self.env.add(self.barista.base_link_mesh)
         self.env.add(self.barista)
 
+        #Baker Robot
+        self.baker.base = SE3(-0.25, 0.4, 0.97)
+        self.baker.base_link_mesh.T = SE3(-0.25, 0.4, 0.97)
+        self.env.add(self.baker.base_link_mesh)
+        self.env.add(self.baker)
+        
+        #Dobot 
+        self.dobot = DobotMagician()
+        self.dobot.base = SE3(0.0, -0.5, 0.97) #* SE3.Rz(-pi/4)
+        self.dobot.add_to_env(self.env)
+        
         import os
         base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -72,7 +86,6 @@ class AutomatedCafe:
         self.register = Mesh(register_path, color=[0.3, 0.3, 0.3, 1.0])
         self.register.T = SE3(-0.5, 0.3, 0.97) * SE3.Rz(pi/2)
         self.env.add(self.register)
-
 
     def run(self):
         """
