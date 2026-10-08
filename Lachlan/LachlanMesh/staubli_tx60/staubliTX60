@@ -1,0 +1,148 @@
+import os
+from math import pi
+from typing import Optional, Union
+
+import numpy as np
+import roboticstoolbox as rtb
+from roboticstoolbox import DHRobot, RevoluteDH, jtraj
+from spatialgeometry import Mesh
+from spatialmath import SE3
+
+class StaubliTX60(DHRobot):
+    """Staubli TX60 6-DOF Industrial Robot."""
+
+    def __init__(self, base: Optional[Union[SE3, np.ndarray]] = None, mesh_dir: Optional[str] = None):
+        
+        # Standard TX60 DH Parameters
+        links = [
+            RevoluteDH(d=0.375, a=0.0,   alpha=-pi/2, offset=0.0),
+            RevoluteDH(d=0.0,   a=0.290, alpha=0.0,   offset=-pi/2),
+            RevoluteDH(d=0.0,   a=0.0,   alpha=pi/2,  offset=0.0),
+            RevoluteDH(d=0.310, a=0.0,   alpha=-pi/2, offset=0.0),
+            RevoluteDH(d=0.0,   a=0.0,   alpha=pi/2,  offset=0.0),
+            RevoluteDH(d=0.070, a=0.0,   alpha=0.0,   offset=0.0)
+        ]
+
+        super().__init__(links, name="Staubli TX60")
+
+        if base is not None:
+            self.base = SE3(base) if isinstance(base, np.ndarray) else base
+
+        # Locate mesh directory
+        if mesh_dir is None:
+            script_dir = os.path.abspath(os.path.dirname(__file__))
+            candidate_dirs = [
+                os.path.join(script_dir, "LachlanMesh", "staubli_tx60"),
+                os.path.join(script_dir, "..", "LachlanMesh", "staubli_tx60"),
+                script_dir
+            ]
+            for d in candidate_dirs:
+                if os.path.exists(os.path.join(d, "base_link.stl")):
+                    mesh_dir = os.path.abspath(d)
+                    break
+
+        self.mesh_dir = mesh_dir
+
+        # CAD-to-DH Offset Matrices
+       
+            # Corrected CAD-to-DH Offset Matrices from URDF
+        offsets = [
+            np.array([
+                [ 1.0,  0.0,  0.0,  0.0],
+                [ 0.0,  0.0, -1.0,  0.0],
+                [ 0.0,  1.0,  0.0,  0.0],
+                [ 0.0,  0.0,  0.0,  1.0]
+            ]),
+            np.array([
+                [ 0.0,  0.0,  1.0, -0.290],
+                [ 1.0,  0.0,  0.0,  0.0],
+                [ 0.0,  1.0,  0.0,  0.0],
+                [ 0.0,  0.0,  0.0,  1.0]
+            ]),
+            np.array([
+                [ 0.0,  0.0,  1.0,  0.0],
+                [ 0.0,  1.0,  0.0,  0.020],
+                [-1.0,  0.0,  0.0,  0.0],
+                [ 0.0,  0.0,  0.0,  1.0]
+            ]),
+            np.array([
+                [ 0.0,  0.0,  1.0,  0.0],
+                [ 1.0,  0.0,  0.0,  0.310],
+                [ 0.0,  1.0,  0.0,  0.020],
+                [ 0.0,  0.0,  0.0,  1.0]
+            ]),
+            np.array([
+                [ 0.0,  0.0,  1.0,  0.310],
+                [ 0.0,  1.0,  0.0,  0.020],
+                [-1.0,  0.0,  0.0,  0.0],
+                [ 0.0,  0.0,  0.0,  1.0]
+            ]),
+            np.array([
+                [ 0.0,  0.0,  1.0,  0.380],
+                [ 0.0,  1.0,  0.0,  0.020],
+                [-1.0,  0.0,  0.0,  0.0],
+                [ 0.0,  0.0,  0.0,  1.0]
+            ])
+        ]
+
+        # Colors: Standard Stäubli Yellow & Gray
+        staubli_yellow = (1.0, 0.7, 0.0, 1.0)
+        staubli_gray = (0.3, 0.3, 0.3, 1.0)
+        link_colors = [staubli_yellow] * 5 + [staubli_gray]
+
+        def load_geom(filename, T_offset, color=staubli_yellow):
+            path = os.path.join(mesh_dir, filename)
+            if os.path.exists(path):
+                m = Mesh(path, color=color)
+                m.T = SE3(T_offset)
+                return m
+            return None
+
+        # Load the base and links
+        self.base_link_mesh = load_geom("base_link.stl", np.eye(4), color=staubli_gray)
+
+        for i in range(6):
+            m = load_geom(f"link_{i+1}.stl", offsets[i], color=link_colors[i])
+            self.links[i].geometry = [m] if m else []
+            self.links[i].collision = [load_geom(f"link_{i+1}.stl", offsets[i], color=link_colors[i])] if m else []
+
+    def _update_link_tf(self, q=None):
+        super(DHRobot, self)._update_link_tf(q)
+
+    def add_to_env(self, env):
+        if self.base_link_mesh is not None:
+            self.base_link_mesh.T = self.base
+            env.add(self.base_link_mesh)
+        env.add(self)
+
+    def test(self, env=None):
+        if env is None:
+            import swift
+            env = swift.Swift()
+            env.launch(realtime=True)
+            self.add_to_env(env)
+
+        q_start = self.q.copy()
+        q_end = np.array([pi / 4, -pi / 6, pi / 3, pi / 4, pi / 3, pi / 6])
+        traj = jtraj(q_start, q_end, 80)
+
+        print("Staubli TX60 moving to target pose...")
+        for q_step in traj.q:
+            self.q = q_step
+            env.step(0.04)
+
+        print("Motion test complete!")
+        while True:
+            env.step(0.05)
+
+
+if __name__ == "__main__":
+    import swift
+    env = swift.Swift()
+    env.launch(realtime=True)
+
+    robot = StaubliTX60()
+    robot.add_to_env(env)
+    env.step(0)
+    
+    robot.test(env=env)
