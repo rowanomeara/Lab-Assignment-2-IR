@@ -41,7 +41,6 @@ class AutomatedCafe:
         self.baker.base_link_mesh.T = SE3(-0.25, 0.4, 0.97)
         self.env.add(self.baker.base_link_mesh)
         self.env.add(self.baker)
-
         
         #Dobot 
         self.dobot = DobotMagician()
