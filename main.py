@@ -3,6 +3,8 @@ from math import pi
 import swift
 from spatialgeometry import Mesh
 from spatialmath import SE3
+from ir_support.robots import DobotMagician
+from ir_support_extra_parts.parts import part_mesh 
 import os
 
 # Import
@@ -17,9 +19,11 @@ class AutomatedCafe:
         self.env.launch(realtime=True)
         
         self.barista = ABB_IRB120()
+        
+        
 
         #self.baker = Jonas?a
-        #self.dispatcher = Laclan's tx60
+        #self.milker = Laclan's tx60
         
         self._setup_workcell()
         
@@ -28,12 +32,17 @@ class AutomatedCafe:
         Add all robots, tables, and props into the Swift environment.
         """
         
-        #Barista Robot
+        #Rowan's Barista Robot
         self.barista.base = SE3(-0.25, 0.2, 0.97)
         self.barista.base_link_mesh.T = SE3(-0.25, 0.2, 0.97)
         self.env.add(self.barista.base_link_mesh)
         self.env.add(self.barista)
-
+        
+        #Dobot 
+        self.dobot = DobotMagician()
+        self.dobot.base = SE3(0.0, -0.5, 0.97) #* SE3.Rz(-pi/4)
+        self.dobot.add_to_env(self.env)
+        
         import os
         from spatialgeometry import Box
         base_path = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +55,7 @@ class AutomatedCafe:
         
         # Plank
         tabletop = Box(scale=[1.2, 2.2, 0.05], color=[0.35, 0.25, 0.15, 1.0])
-        tabletop.T = SE3(-0.3, -0.2, 0.95)#*SE3.Rz(pi)
+        tabletop.T = SE3(-0.3, -0.2, 0.95)
         self.env.add(tabletop)
 
         #Coffee Machine
@@ -79,6 +88,11 @@ class AutomatedCafe:
         self.register.T = SE3(-0.7, -0.35, 0.02) * SE3.Rz(-pi/4)
         self.env.add(self.register)
         
+        #Tray
+        self.tray = part_mesh("Tray")
+        self.tray.T = SE3(-0.55, -0.5, 0.97)
+        self.env.add(self.tray)
+        
     def barista_pick_up_cup(self):
         from roboticstoolbox import jtraj
         
@@ -89,9 +103,9 @@ class AutomatedCafe:
         ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
         ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q)   
         
-        traj_hover  = jtraj(self.barista.q, ik_hover.q, 30)
-        traj_target = jtraj(ik_hover.q,     ik_target.q, 20)
-        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 20)
+        traj_hover  = jtraj(self.barista.q, ik_hover.q, 10)
+        traj_target = jtraj(ik_hover.q,     ik_target.q, 5)
+        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 5)
         
         #Move to Hover
         for q_step in traj_hover.q:
@@ -122,7 +136,7 @@ class AutomatedCafe:
         
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
         
-        traj_target = jtraj(self.barista.q,  ik_target.q, 30)
+        traj_target = jtraj(self.barista.q,  ik_target.q, 10)
             
         for q_step in traj_target.q:
             self.barista.q = q_step
@@ -130,7 +144,7 @@ class AutomatedCafe:
                 self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
             self.env.step(0.05)
         
-        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, 0], 30)
+        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, 0], 10)
             
         print("Cup under coffee machine :)")
         self.cup_attached = False
@@ -149,18 +163,17 @@ class AutomatedCafe:
         self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
         self.env.add(self.coffee)
         
-        current_pose = self.barista.fkine(self.barista.q)
         target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
         
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
         
-        traj_target = jtraj(self.barista.q,  ik_target.q, 30)
+        traj_target = jtraj(self.barista.q,  ik_target.q, 20)
             
         for q_step in traj_target.q:
             self.barista.q = q_step
             self.env.step(0.05)
         
-        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, -25*pi/180], 30)
+        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, -25*pi/180], 20)
             
         print("Cup under coffee machine :)")
         self.cup_attached = True
@@ -180,6 +193,8 @@ class AutomatedCafe:
                 self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
                 self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
             self.env.step(0.05)
+            
+
  
 
     def run(self):
