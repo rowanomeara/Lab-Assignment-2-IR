@@ -9,6 +9,7 @@ import os
 
 # Import
 from Rowan.abb_irb120 import ABB_IRB120
+from Jonas.Assignment2 import DoosanM0609
 
 class AutomatedCafe:
     def __init__(self):
@@ -19,12 +20,9 @@ class AutomatedCafe:
         self.env.launch(realtime=True)
         
         self.barista = ABB_IRB120()
-        
-        
+        self.baker = DoosanM0609()
 
-        #self.baker = Jonas?a
-        #self.milker = Laclan's tx60
-        
+        #self.dispatcher = Laclan's tx60
         self._setup_workcell()
         
     def _setup_workcell(self):
@@ -37,6 +35,13 @@ class AutomatedCafe:
         self.barista.base_link_mesh.T = SE3(-0.25, 0.2, 0.97)
         self.env.add(self.barista.base_link_mesh)
         self.env.add(self.barista)
+
+        #Baker Robot
+        self.baker.base = SE3(-0.25, 0.4, 0.97)
+        self.baker.base_link_mesh.T = SE3(-0.25, 0.4, 0.97)
+        self.env.add(self.baker.base_link_mesh)
+        self.env.add(self.baker)
+
         
         #Dobot 
         self.dobot = DobotMagician()
