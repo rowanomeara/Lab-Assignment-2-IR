@@ -136,6 +136,38 @@ class AutomatedCafe:
         self.env.add(self.roll)
         self.roll_attached = False
         
+        #\\\Environment///
+
+        floor = Box(scale=[6.0, 7.0, 0.02], color=[0.25, 0.18, 0.12, 1.0])
+        floor.T = SE3(0.0, -0.5, 0.001)
+        self.env.add(floor)
+        
+        back_wall = Box(scale=[0.05, 5.0, 2.6], color=[0.85, 0.82, 0.78, 1.0])
+        back_wall.T = SE3(-1.8, -0.5, 1.3)
+        self.env.add(back_wall)
+        
+        menu_board = Box(scale=[0.02, 1.4, 0.8], color=[0.12, 0.12, 0.12, 1.0])
+        menu_board.T = SE3(-1.75, 0.2, 1.9)
+        self.env.add(menu_board)
+        
+        table = part_mesh("StandingBarTable")
+        table.T = SE3(2.1, 2.5, 0.0)
+        self.env.add(table)
+
+        chair = part_mesh("chair")
+        chair.T = SE3(2.5, 2.5, 0.0) * SE3.Ry(-pi / 2)* SE3.Rz(-pi / 2)
+        self.env.add(chair)
+        
+        customer = part_mesh("personMaleCasual") 
+        customer.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
+        self.env.add(customer)
+        
+        takeaway_cup = part_mesh("TakeawayCup")
+        takeaway_cup.T = SE3(0.5, -0.1, 0.97)
+        self.env.add(takeaway_cup)
+        
+        
+        
     def barista_pick_up_cup(self):
         from roboticstoolbox import jtraj
         
