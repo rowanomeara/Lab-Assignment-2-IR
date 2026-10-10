@@ -94,3 +94,26 @@ if __name__ == "__main__":
     T6 = T5 * SE3(0, -0.121, 0) * SE3.Rx(pi/2)
     doosan_cad = [T1, T2, T3, T4, T5, T6]
     calculate_offsets("Doosan M0609", doosan_dh, doosan_cad)
+
+    # Staubli TX60 RAAHHAHAHAHA
+   
+    staubli_dh = [
+        DHLink(d=0.375, a=0.0,   alpha=-pi/2, offset=0.0),
+        DHLink(d=0.0,   a=0.290, alpha=0.0,   offset=-pi/2),
+        DHLink(d=0.0,   a=0.0,   alpha=pi/2,  offset=0.0),
+        DHLink(d=0.310, a=0.0,   alpha=-pi/2, offset=0.0),
+        DHLink(d=0.0,   a=0.0,   alpha=pi/2,  offset=0.0),
+        DHLink(d=0.070, a=0.0,   alpha=0.0,   offset=0.0)
+    ]
+    
+    
+    T0 = SE3()
+    T1 = T0 * SE3(0, 0, 0.375)                  
+    T2 = T1 * SE3(0, 0, 0)                     
+    T3 = T2 * SE3(0, 0.02, 0.290)              
+    T4 = T3 * SE3(0, 0, 0)                      
+    T5 = T4 * SE3(0, 0, 0.310)                  
+    T6 = T5 * SE3(0, 0, 0.070)                  
+    
+    staubli_cad = [T1, T2, T3, T4, T5, T6]
+    calculate_offsets("Staubli TX60", staubli_dh, staubli_cad)
