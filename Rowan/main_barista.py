@@ -43,15 +43,22 @@ class AutomatedCafe:
         self.env.add(self.barista)
         
         #Jonas's Baker Robot
-        self.baker.base = SE3(-0.25, -0.6, 0.97)
-        self.baker.base_link_mesh.T = SE3(-0.25, -0.6, 0.97)
+        self.baker.base = SE3(-0.25, -1.8, 0.97)
+        self.baker.base_link_mesh.T = SE3(-0.25, -1.8, 0.97)
         self.env.add(self.baker.base_link_mesh)
         self.env.add(self.baker)
         
         #Dobot 
-        self.dobot = DobotMagician()
-        self.dobot.base = SE3(0.0, -0.5, 0.97) #* SE3.Rz(-pi/4)
-        self.dobot.add_to_env(self.env)
+        dobot_base = SE3(-0.85, 0.0, 0.97)
+        self.dobot = DobotMagician(base=dobot_base)
+        self.dobot.base = dobot_base
+        
+        # Making the jug level:
+        q2_ready = 25 * pi / 180
+        q3_ready = 20 * pi / 180
+        q4_level = -(q2_ready + q3_ready)
+        self.dobot_q_ready = np.array([0.0, q2_ready, q3_ready, q4_level, 0.0])
+        self.dobot.q = self.dobot_q_ready
         
         import os
         from spatialgeometry import Box
@@ -64,8 +71,8 @@ class AutomatedCafe:
         self.env.add(self.counter)
         
         # Plank
-        tabletop = Box(scale=[1.2, 2.2, 0.05], color=[0.35, 0.25, 0.15, 1.0])
-        tabletop.T = SE3(-0.3, -0.2, 0.95)
+        tabletop = Box(scale=[1.8, 2.2, 0.05], color=[0.35, 0.25, 0.15, 1.0])
+        tabletop.T = SE3(-0.6, -0.2, 0.95)
         self.env.add(tabletop)
 
         #Coffee Machine
@@ -80,11 +87,13 @@ class AutomatedCafe:
         self.cup.T = SE3(0, 0.6, 0.97) 
         self.env.add(self.cup)
         
-        # Milk Jug 
+        # Milk Jug
         jug_path = os.path.join(base_path, "Workcell meshes", "Milk Pouring Jug.stl")
-        self.jug = Mesh(jug_path, color=[0.7, 0.7, 0.75, 1.0])
-        self.jug.T = SE3(0.4, 0.5, 0.97)
+        self.jug = Mesh(jug_path, color=[0.7, 0.7, 0.75, 1.0], scale=[0.001, 0.001, 0.001])
+        self.jug_offset = SE3.Ry(pi) * SE3(-0.168, -0.091, -0.081)
+        self.jug.T = self.dobot.fkine(self.dobot.q) * self.jug_offset
         self.env.add(self.jug)
+        self.dobot.add_to_env(self.env)
         
         # Service Bell 
         bell_path = os.path.join(base_path, "Workcell meshes", "Service Bell", "Table_Bell.stl")
@@ -167,8 +176,7 @@ class AutomatedCafe:
         from roboticstoolbox import jtraj
         from spatialgeometry import Cylinder
         
-        #Coffee liquid
-        coffee_color = [0.35, 0.18, 0.05, 1.0]
+        coffee_color = [0.15, 0.08, 0.03, 1.0]
         self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
         self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
         self.env.add(self.coffee)
@@ -204,8 +212,55 @@ class AutomatedCafe:
                 self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
             self.env.step(0.05)
             
+    def barista_present_cup_to_dobot(self):
+        from roboticstoolbox import jtraj
+        
+        handover_cup_pose = self.dobot.base * SE3(0.28, 0.0, 0.16)
+        
+        ee_target = handover_cup_pose * self.cup_offset.inv()
+        
+        ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q)
+        
+        traj_present = jtraj(self.barista.q, ik_present.q, 25)
+        for q_step in traj_present.q:
+            self.barista.q = q_step
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+                self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.env.step(0.05)
+                
+        print("Cup presented to Dobot for milk :)")
 
- 
+    def dobot_pour_milk(self):
+        from roboticstoolbox import jtraj
+        from spatialgeometry import Cylinder
+
+        def move(q_target, steps):
+            for q in jtraj(self.dobot.q, q_target, steps).q:
+                self.dobot.q = q
+                self.jug.T = self.dobot.fkine(self.dobot.q) * self.jug_offset
+                self.env.step(0.05)
+
+        T_cup_rim = (SE3(self.cup.T) * SE3(-0.05, 0.0, 0.125)).t
+        T_ee_target = SE3(T_cup_rim - [0.156, 0.0, 0.080]) * SE3.Rx(pi)
+
+        sol_reach = self.dobot.ikine_LM(T_ee_target, q0=self.dobot.q, mask=[1, 1, 1, 0, 0, 0])
+        q_reach = sol_reach.q.copy()
+        q_reach[3] = -(q_reach[1] + q_reach[2])
+
+        move(q_reach, 20)
+
+        q_pour = q_reach.copy()
+        q_pour[3] += 25 * pi / 180
+        move(q_pour, 15)
+
+        self.milk = Cylinder(radius=0.058, length=0.015, color=[0.55, 0.36, 0.20, 1.0])
+        self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+        self.env.add(self.milk)
+        print("Dobot poured milk into the cup <3")
+
+        move(q_reach, 15)
+        move(self.dobot_q_ready, 20)
 
     def run(self):
         """
@@ -218,6 +273,10 @@ class AutomatedCafe:
         self.barista_place_cup()
         
         self.barista_get_coffee()
+
+        self.barista_present_cup_to_dobot()
+
+        self.dobot_pour_milk()
         
         while True:
             self.env.step(0.05)
