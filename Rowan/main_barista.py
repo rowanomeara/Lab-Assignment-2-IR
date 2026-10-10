@@ -261,6 +261,30 @@ class AutomatedCafe:
 
         move(q_reach, 15)
         move(self.dobot_q_ready, 20)
+        
+    def barista_serve_coffee(self):
+        from roboticstoolbox import jtraj
+
+        target_cup = SE3(self.tray.T) * SE3(0, 0, 0.03)
+        ee_target = target_cup * SE3.Rz(65 * pi / 180) * self.cup_offset.inv()
+        
+        ik_serve = self.barista.ikine_LM(ee_target, q0=self.barista.q)
+
+        traj_serve = jtraj(self.barista.q, ik_serve.q, 25)
+        for q_step in traj_serve.q:
+            self.barista.q = q_step
+            self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        print("Coffee placed on tray :)")
+        self.cup_attached = False
+
+        traj_home = jtraj(self.barista.q, np.zeros(6), 20)
+        for q_step in traj_home.q:
+            self.barista.q = q_step
+            self.env.step(0.05)
 
     def run(self):
         """
@@ -277,6 +301,8 @@ class AutomatedCafe:
         self.barista_present_cup_to_dobot()
 
         self.dobot_pour_milk()
+        
+        self.barista_serve_coffee()
         
         while True:
             self.env.step(0.05)
