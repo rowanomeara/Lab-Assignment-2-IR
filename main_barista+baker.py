@@ -62,7 +62,7 @@ class AutomatedCafe:
         self.env.add(self.baker)
         
         #Dobot 
-        dobot_base = SE3(-0.85, 0.0, 0.97)
+        dobot_base = SE3(-0.9, 0.0, 0.97)
         self.dobot = DobotMagician(base=dobot_base)
         self.dobot.base = dobot_base
         
@@ -258,7 +258,7 @@ class AutomatedCafe:
                 self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
             self.env.step(0.05)
             
-        traj_rot  = jtraj(self.barista.q,  self.barista.q + [-90*pi/180, 0, 0, 0, 0, 0], 30)
+        traj_rot  = jtraj(self.barista.q,  self.barista.q + [-100*pi/180, 0, 0, 0, 0, 0], 30)
         
         for q_step in traj_rot.q:
             self.barista.q = q_step
@@ -320,23 +320,27 @@ class AutomatedCafe:
     def barista_serve_coffee(self):
         from roboticstoolbox import jtraj
 
-        target_cup = SE3(self.tray.T) * SE3(0.15, 0, 0.01)
-        ee_target = target_cup * SE3.Rz(65 * pi / 180) * self.cup_offset.inv()
-        hover_cup = ee_target * SE3.Ty(-0.2)
-        
-        ik_hover = self.barista.ikine_LM(hover_cup, q0=self.barista.q)
-        ik_serve = self.barista.ikine_LM(ee_target, q0=self.barista.q)
+        target_cup = SE3(self.tray.T) * SE3(0.08, 0.0, 0.03)
+        hover_cup = SE3(0, 0, 0.12) * target_cup
 
-        traj_hover = jtraj(self.barista.q, ik_hover.q, 40)
-        traj_serve = jtraj(self.barista.q, ik_serve.q, 40)
-        
+        ee_hover = hover_cup * SE3.Rz(pi) * self.cup_offset.inv()
+        ee_target = target_cup * SE3.Rz(pi) * self.cup_offset.inv()
+
+        ik_hover = self.barista.ikine_LM(ee_hover, q0=self.barista.q)
+        ik_serve = self.barista.ikine_LM(ee_target, q0=ik_hover.q)
+        ik_retract = self.barista.ikine_LM(ee_hover, q0=ik_serve.q)
+
+        traj_hover = jtraj(self.barista.q, ik_hover.q, 25)
+        traj_serve = jtraj(ik_hover.q, ik_serve.q, 15)
+        traj_retract = jtraj(ik_serve.q, ik_retract.q, 15)
+
         for q_step in traj_hover.q:
             self.barista.q = q_step
             self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
             self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
             self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
             self.env.step(0.05)
-        
+
         for q_step in traj_serve.q:
             self.barista.q = q_step
             self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
@@ -347,8 +351,13 @@ class AutomatedCafe:
         print("Coffee placed on tray :)")
         self.cup_attached = False
 
-        traj_raise = jtraj(self.barista.q, np.zeros(6), 40)
-        for q_step in traj_raise.q:
+        for q_step in traj_retract.q:
+            self.barista.q = q_step
+            self.env.step(0.05)
+
+        q_home = np.array([-pi/3, 0.0, 20*pi/180, 0.0, 30*pi/180, 0.0])
+        traj_home = jtraj(self.barista.q, q_home, 20)
+        for q_step in traj_home.q:
             self.barista.q = q_step
             self.env.step(0.05)
 
