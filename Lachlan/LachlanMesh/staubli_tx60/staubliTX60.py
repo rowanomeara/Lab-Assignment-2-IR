@@ -96,5 +96,5 @@ if __name__ == "__main__":
     try:
         while True:
             env.step(0.05)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, Exception):
         print("Done.")
