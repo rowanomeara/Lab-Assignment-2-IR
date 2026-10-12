@@ -19,7 +19,7 @@ class StaubliTX60(DHRobot):
         links = [
             RevoluteDH(d=0.375, a=0.0,   alpha=-pi / 2, qlim=qlim_full),
             RevoluteDH(d=0.0,   a=0.290, alpha=0.0,     offset=-pi / 2, qlim=qlim_full),
-            RevoluteDH(d=0.0,   a=0.0,   alpha=pi / 2,  qlim=qlim_full),
+            RevoluteDH(d=0.020, a=0.0,   alpha=pi / 2,  offset=pi / 2,  qlim=qlim_full),
             RevoluteDH(d=0.310, a=0.0,   alpha=-pi / 2, qlim=qlim_full),
             RevoluteDH(d=0.0,   a=0.0,   alpha=pi / 2,  qlim=qlim_full),
             RevoluteDH(d=0.070, a=0.0,   alpha=0.0,     qlim=qlim_full),
@@ -30,7 +30,7 @@ class StaubliTX60(DHRobot):
         if base is not None:
             self.base = SE3(base) if isinstance(base, np.ndarray) else base
 
-        # --- FIX 1: Robust Absolute Path Resolution for OneDrive ---
+        # Locate mesh directory
         if mesh_dir is None:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             candidate_dirs = [
@@ -47,19 +47,59 @@ class StaubliTX60(DHRobot):
 
         self.mesh_dir = os.path.normpath(os.path.abspath(mesh_dir))
 
+        # CAD-to-DH transformation offsets
         offsets = [
-            np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, -1.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
-            np.array([[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
-            np.array([[0.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0], [-1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
-            np.array([[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
-            np.array([[0.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0], [-1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
-            np.array([[0.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 0.0], [-1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]]),
+            np.array([
+                [1.0, 0.0,  0.0, 0.0],
+                [0.0, 0.0, -1.0, 0.0],
+                [0.0, 1.0,  0.0, 0.0],
+                [0.0, 0.0,  0.0, 1.0],
+            ]),
+            np.array([
+                [0.0, 0.0, 1.0, -0.29],
+                [1.0, 0.0, 0.0,  0.0],
+                [0.0, 1.0, 0.0,  0.0],
+                [0.0, 0.0, 0.0,  1.0],
+            ]),
+            np.array([
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]),
+            np.array([
+                [1.0, 0.0,  0.0, 0.0],
+                [0.0, 0.0, -1.0, 0.31],
+                [0.0, 1.0,  0.0, 0.0],
+                [0.0, 0.0,  0.0, 1.0],
+            ]),
+            np.array([
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]),
+            np.array([
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]),
         ]
 
         staubli_yellow = (1.0, 0.7, 0.0, 1.0)
         staubli_gray = (0.3, 0.3, 0.3, 1.0)
 
-        # --- FIX 2: Strict File Verification before loading Mesh ---
+        # Base link mesh
+        base_path = os.path.normpath(os.path.join(self.mesh_dir, "base_link.stl")).replace("\\", "/")
+        if os.path.isfile(base_path):
+            self.base_link_mesh = Mesh(filename=base_path, color=staubli_yellow)
+            if base is not None:
+                self.base_link_mesh.T = self.base
+        else:
+            self.base_link_mesh = None
+
+        # Attach link meshes
         for i in range(6):
             stl_path = os.path.normpath(os.path.join(self.mesh_dir, f"link_{i+1}.stl")).replace("\\", "/")
                         
@@ -69,10 +109,18 @@ class StaubliTX60(DHRobot):
                     m = Mesh(filename=stl_path, color=color)
                     m.T = SE3(offsets[i])
                     self.links[i].geometry = [m]
+                    m_col = Mesh(filename=stl_path)
+                    m_col.T = SE3(offsets[i])
+                    self.links[i].collision = [m_col]
                 except Exception as e:
                     print(f"Error loading mesh {stl_path}: {e}")
             else:
                 print(f"Missing file: {stl_path}")
+
+    def _update_link_tf(self, q=None):
+        super(DHRobot, self)._update_link_tf(q)
+        if hasattr(self, "base_link_mesh") and self.base_link_mesh is not None:
+            self.base_link_mesh.T = self.base
 
 
 if __name__ == "__main__":
@@ -82,6 +130,8 @@ if __name__ == "__main__":
     env.launch(realtime=True)
 
     robot = StaubliTX60()
+    if robot.base_link_mesh is not None:
+        env.add(robot.base_link_mesh)
     env.add(robot)
     env.step(0)
 
