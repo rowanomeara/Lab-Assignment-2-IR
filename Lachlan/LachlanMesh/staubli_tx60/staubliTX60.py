@@ -9,6 +9,7 @@ from roboticstoolbox import DHRobot, RevoluteDH, jtraj
 from spatialgeometry import Mesh
 from spatialmath import SE3
 
+stl_path = os.path.normpath(os.path.join(self.mesh_dir, f"link_{i+1}.stl"))
 
 class StaubliTX60(DHRobot):
     """Staubli TX60 6-DOF Industrial Robot Arm."""
@@ -61,7 +62,7 @@ class StaubliTX60(DHRobot):
 
         # --- FIX 2: Strict File Verification before loading Mesh ---
         for i in range(6):
-            stl_path = os.path.normpath(os.path.join(self.mesh_dir, f"link_{i+1}.stl"))
+            stl_path = os.path.normpath(os.path.join(self.mesh_dir, f"link_{i+1}.stl")).replace("\\", "/")
             
             if os.path.isfile(stl_path):
                 color = staubli_gray if i == 5 else staubli_yellow
