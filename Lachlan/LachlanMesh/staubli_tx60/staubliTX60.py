@@ -6,8 +6,12 @@ from typing import Optional, Union
 import numpy as np
 import roboticstoolbox as rtb
 from roboticstoolbox import DHRobot, RevoluteDH, jtraj
-from spatialgeometry import Mesh
+from spatialgeometry import Mesh, Shape
 from spatialmath import SE3
+
+# Swift / spatialgeometry compatibility guard
+if not hasattr(Shape, "_update_pyb"):
+    Shape._update_pyb = lambda self: self._update_coal() if hasattr(self, "_update_coal") else None
 
 
 class StaubliTX60(DHRobot):
