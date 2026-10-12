@@ -120,7 +120,7 @@ class AutomatedCafe:
         
         # Serving Tray
         tray_path = os.path.join(base_path, "Workcell meshes", "Serving Tray", "serving_tray.stl")
-        self.tray = Mesh(tray_path, color=[0.35, 0.25, 0.18, 1.0])
+        self.tray = Mesh(tray_path, color=[0.0, 0.0, 0.0, 1.0])
         self.tray.T = SE3(-0.3, -0.3, 0.97)
         self.env.add(self.tray)
 
@@ -129,14 +129,42 @@ class AutomatedCafe:
         self.plate.T = SE3(-0.38, -0.3, 0.985)
         self.env.add(self.plate)
 
-        # Baked Roll on Tabletop Prep Area
+        # Open Box Display Case     
+        self.display_base = Box(scale=[0.45, 0.28, 0.015], color=[0.25, 0.2, 0.15, 1.0])
+        self.display_base.T = SE3(0.0, -1.15, 0.9825)
+        self.env.add(self.display_base)
+
+        self.display_front = Box(scale=[0.005, 0.28, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_front.T = SE3(0.225, -1.15, 1.04)
+        self.env.add(self.display_front)
+
+        self.display_back = Box(scale=[0.005, 0.28, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_back.T = SE3(-0.225, -1.15, 1.04)
+        self.env.add(self.display_back)
+
+        self.display_side1 = Box(scale=[0.45, 0.005, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_side1.T = SE3(0.0, -1.01, 1.04)
+        self.env.add(self.display_side1)
+
+        self.display_side2 = Box(scale=[0.45, 0.005, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_side2.T = SE3(0.0, -1.29, 1.04)
+        self.env.add(self.display_side2)
+
+        # Baked Rolls in a 4x5 Grid inside Display Case
         roll_path = os.path.join(base_path, "Workcell meshes", "Baked Roll", "roll.stl")
-        self.roll = Mesh(roll_path, color=[0.82, 0.55, 0.28, 1.0])
-        self.roll.T = SE3(-0.3, -0.6, 0.975) * SE3.Rx(-pi/2)
-        self.env.add(self.roll)
+        self.rolls = []
+        for x in np.linspace(-0.15, 0.15, 4):
+            for y in np.linspace(-1.270, -1.1, 5):
+                roll = Mesh(roll_path, color=[0.82, 0.55, 0.28, 1.0])
+                roll.T = SE3(x, y, 0.99) * SE3.Rx(-pi/2)
+                self.env.add(roll)
+                self.rolls.append(roll)
+
+        self.roll = self.rolls[0]
+        self.croissant = self.roll
         self.roll_attached = False
         
-        #\\\Environment///
+        #Environment
 
         floor = Box(scale=[6.0, 7.0, 0.02], color=[0.25, 0.18, 0.12, 1.0])
         floor.T = SE3(0.0, -0.5, 0.001)
@@ -418,7 +446,7 @@ class AutomatedCafe:
             self.roll.T = self.baker.fkine(self.baker.q) * self.roll_offset
             self.env.step(0.05)
 
-        print("Baked roll placed on plate atop serving tray :)")
+        print("Baked roll placed on plate <3 ")
         self.roll_attached = False
 
         # 6. Retract from plate

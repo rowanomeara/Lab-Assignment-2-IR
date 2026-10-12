@@ -101,28 +101,32 @@ class AutomatedCafe:
         self.plate.T = SE3(-0.6, -0.6, 0.985)
         self.env.add(self.plate)
 
-        # Display Case in line with Bench Corner
-        self.display_base = Box(scale=[0.38, 0.28, 0.015], color=[0.25, 0.2, 0.15, 1.0])
-        self.display_base.T = SE3(0.05, -1.16, 0.9825)
+        # Open Box Display Case Centered with Pastries
+        self.display_base = Box(scale=[0.45, 0.28, 0.015], color=[0.25, 0.2, 0.15, 1.0])
+        self.display_base.T = SE3(0.0, -1.15, 0.9825)
         self.env.add(self.display_base)
 
         self.display_front = Box(scale=[0.005, 0.28, 0.10], color=[0.8, 0.9, 1.0, 0.3])
-        self.display_front.T = SE3(0.24, -1.16, 1.04)
+        self.display_front.T = SE3(0.225, -1.15, 1.04)
         self.env.add(self.display_front)
 
-        self.display_side1 = Box(scale=[0.38, 0.005, 0.10], color=[0.8, 0.9, 1.0, 0.3])
-        self.display_side1.T = SE3(0.05, -1.02, 1.04)
+        self.display_back = Box(scale=[0.005, 0.28, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_back.T = SE3(-0.225, -1.15, 1.04)
+        self.env.add(self.display_back)
+
+        self.display_side1 = Box(scale=[0.45, 0.005, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_side1.T = SE3(0.0, -1.01, 1.04)
         self.env.add(self.display_side1)
 
-        self.display_side2 = Box(scale=[0.38, 0.005, 0.10], color=[0.8, 0.9, 1.0, 0.3])
-        self.display_side2.T = SE3(0.05, -1.30, 1.04)
+        self.display_side2 = Box(scale=[0.45, 0.005, 0.10], color=[0.8, 0.9, 1.0, 0.3])
+        self.display_side2.T = SE3(0.0, -1.29, 1.04)
         self.env.add(self.display_side2)
 
         # Baked Rolls in a 4x5 Grid inside Display Case
         roll_path = os.path.join(base_path, "Workcell meshes", "Baked Roll", "roll.stl")
         self.rolls = []
-        for x in np.linspace(-0.10, 0.11, 4):
-            for y in np.linspace(-1.24, -1.08, 5):
+        for x in np.linspace(-0.15, 0.15, 4):
+            for y in np.linspace(-1.270, -1.1, 5):
                 roll = Mesh(roll_path, color=[0.82, 0.55, 0.28, 1.0])
                 roll.T = SE3(x, y, 0.99) * SE3.Rx(-pi/2)
                 self.env.add(roll)
