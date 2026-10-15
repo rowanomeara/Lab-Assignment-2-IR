@@ -213,9 +213,9 @@ class AutomatedCafe:
         ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
         ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q)   
         
-        traj_hover  = jtraj(self.barista.q, ik_hover.q, 10)
-        traj_target = jtraj(ik_hover.q,     ik_target.q, 5)
-        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 5)
+        traj_hover  = jtraj(self.barista.q, ik_hover.q, 20)
+        traj_target = jtraj(ik_hover.q,     ik_target.q, 20)
+        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 20)
         
         #Move to Hover
         for q_step in traj_hover.q:
@@ -245,7 +245,7 @@ class AutomatedCafe:
         
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
         
-        traj_target = jtraj(self.barista.q,  ik_target.q, 10)
+        traj_target = jtraj(self.barista.q,  ik_target.q, 20)
             
         for q_step in traj_target.q:
             self.barista.q = q_step
@@ -253,7 +253,7 @@ class AutomatedCafe:
                 self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
             self.env.step(0.05)
         
-        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, 0], 10)
+        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, 0], 20)
             
         print("Cup under coffee machine :)")
         self.cup_attached = False
@@ -275,13 +275,13 @@ class AutomatedCafe:
         
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
         
-        traj_target = jtraj(self.barista.q,  ik_target.q, 20)
+        traj_target = jtraj(self.barista.q,  ik_target.q, 30)
             
         for q_step in traj_target.q:
             self.barista.q = q_step
             self.env.step(0.05)
         
-        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, -25*pi/180], 20)
+        traj_raise  = jtraj(self.barista.q,  self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, -25*pi/180], 30)
             
         print("Cup under coffee machine :)")
         self.cup_attached = True
@@ -311,7 +311,7 @@ class AutomatedCafe:
         
         ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q)
         
-        traj_present = jtraj(self.barista.q, ik_present.q, 25)
+        traj_present = jtraj(self.barista.q, ik_present.q, 30)
         for q_step in traj_present.q:
             self.barista.q = q_step
             if self.cup_attached:
@@ -365,7 +365,7 @@ class AutomatedCafe:
         ik_serve = self.barista.ikine_LM(ee_target, q0=ik_hover.q)
         ik_retract = self.barista.ikine_LM(ee_hover, q0=ik_serve.q)
 
-        traj_hover = jtraj(self.barista.q, ik_hover.q, 25)
+        traj_hover = jtraj(self.barista.q, ik_hover.q, 30)
         traj_serve = jtraj(ik_hover.q, ik_serve.q, 15)
         traj_retract = jtraj(ik_serve.q, ik_retract.q, 15)
 
