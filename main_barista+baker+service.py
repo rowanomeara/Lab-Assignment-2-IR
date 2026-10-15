@@ -201,6 +201,10 @@ class AutomatedCafe:
         takeaway_cup.T = SE3(0.5, -0.1, 0.97)
         self.env.add(takeaway_cup)
         
+        self.estop = part_mesh("emergencyStopWallMounted")
+        self.estop.T = SE3(-1.77, -0.6, 1.4)*SE3.Rz(-pi/2)
+        self.env.add(self.estop)
+        
         
         
     def barista_pick_up_cup(self):
