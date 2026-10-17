@@ -8,6 +8,9 @@ from ir_support.robots import DobotMagician
 from ir_support_extra_parts.parts import part_mesh 
 import os
 import sys
+import numpy as np
+sys.modules['numpy.char'] = np.char 
+from machinevisiontoolbox import CentralCamera
 
 ROWAN_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.abspath(os.path.join(ROWAN_DIR, ".."))
@@ -45,10 +48,8 @@ class AutomatedCafe:
         self.env = swift.Swift()
         self.env.launch(realtime=True)
         
-        # Primary Robot: Rowan's ABB IRB 120
         self.barista = ABB_IRB120()
         
-        # Static teammate robots (visual background in shared workcell)
         self.baker = DoosanM0609() if DoosanM0609 is not None else None
         self.staubli = StaubliTX60() if StaubliTX60 is not None else None
         
@@ -213,21 +214,25 @@ class AutomatedCafe:
         self.env.add(self.estop)
 
     def barista_pick_up_cup(self):
-        target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
-        hover_pose = SE3(self.cup.T) * SE3(0.0, -0.25, 0.16) * SE3.Rx(-pi/2)
-        
+
+        hover_pose = SE3(self.cup.T) * SE3(0.0, -0.15, 0.16) * SE3.Rx(-pi/2)
         ik_hover  = self.barista.ikine_LM(hover_pose,  q0=self.barista.q)
-        ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
-        ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q)   
-        
         traj_hover  = jtraj(self.barista.q, ik_hover.q, 20)
-        traj_target = jtraj(ik_hover.q,     ik_target.q, 20)
-        traj_raise  = jtraj(ik_target.q,    ik_raise.q, 20)
         
         # Move to Hover
         for q_step in traj_hover.q:
             self.barista.q = q_step
             self.env.step(0.05)
+        
+        self.visual_servo_to_cup()
+        
+        target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
+        
+        ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
+        ik_raise  = self.barista.ikine_LM(hover_pose,  q0=ik_target.q) 
+        
+        traj_target = jtraj(self.barista.q, ik_target.q, 20)
+        traj_raise  = jtraj(ik_target.q, ik_raise.q, 20)
             
         # Lower to Cup
         for q_step in traj_target.q:
@@ -245,17 +250,14 @@ class AutomatedCafe:
             self.env.step(0.05)
             
     def barista_place_cup(self):
-        # 1. Target pose inside the machine bay relative to current pose
-        current_pose = self.barista.fkine(self.barista.q)
-        target_pose = SE3(0.27, -0.12, 0.0) * current_pose
+        #current_pose = self.barista.fkine(self.barista.q)
+        target_pose = SE3(0.27, 0.22, 1.13) * SE3.Rx(-pi/2)
         
-        # 2. Pure straight-line insertion using RMRC (replaces ikine_LM + jtraj)
         self.rmrc_straight_line(target_pose, steps=25)
         
         print("Cup under coffee machine :)")
         self.cup_attached = False
         
-        # 3. Retract the empty gripper up and away from the cup
         q_retract = self.barista.q + [0, -50 * pi / 180, 80 * pi / 180, 0, 0, 0]
         traj_retract = jtraj(self.barista.q, q_retract, 20)
             
@@ -265,13 +267,11 @@ class AutomatedCafe:
             
     def barista_get_coffee(self):
         
-        # 1. Fill cup with coffee
         coffee_color = [0.15, 0.08, 0.03, 1.0]
         self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
         self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
         self.env.add(self.coffee)
         
-        # 2. Regrasp the cup under the tap
         target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
         for q_step in jtraj(self.barista.q, ik_target.q, 25).q:
@@ -279,10 +279,8 @@ class AutomatedCafe:
             self.env.step(0.05)
         self.cup_attached = True
         
-        # 3. Step 1: Straight horizontal RMRC extraction out of machine bay
         T_extract = SE3(-0.27, -0.20, 0.0) * self.barista.fkine(self.barista.q)
         self.rmrc_straight_line(T_extract, steps=25)
-        
         
             
     def barista_present_cup_to_dobot(self):
@@ -384,7 +382,7 @@ class AutomatedCafe:
             v_lin = (p_goal - np.array(T_curr.t)) / rem_time # Linear velocity vector: straight line from current position to goal
             xdot = np.hstack((v_lin, np.zeros(3))) # 6D Cartesian velocity: move linearly, but ZERO angular rotation (keep cup level)
 
-            # Jacobian & DLS (tuned for IRB 120 manipulability scale)
+            # Jacobian & DLS
             J = self.barista.jacob0(self.barista.q) # 1. Get the 6x6 Jacobian at current arm position
             m = np.sqrt(np.linalg.det(J @ J.T)) # 2. Check manipulability (distance to singularity)
             damping = 0.001 if m < 0.01 else 0.0 # 3. Apply Damped Least Squares if manipulability drops below threshold
@@ -397,6 +395,48 @@ class AutomatedCafe:
                 if hasattr(self, 'coffee'):
                     self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
 
+            self.env.step(dt)
+    
+    
+    def visual_servo_to_cup(self, max_steps=25, dt=0.05):
+        """
+        IBVS: Translates gripper to center directly over the cup using world-frame Jacobian.
+        """
+        cam = CentralCamera(f=0.08, rho=10e-5, imagesize=[1024, 1024], pp=[512, 512]) #Instantiate virtual camera (Lab 8 parameters)
+
+        p = SE3(self.cup.T).t
+        pts_world = p[:, None] + [[0.04, -0.04, 0.04, -0.04], [0, 0, 0, 0], [0.08, 0.08, 0.01, 0.01]] #Define 4 physical feature points on the cup in world space 
+        #(front face: top-left, top-right, bottom-left, bottom-right)
+
+        T_desired = SE3(self.cup.T) * SE3(0.0, -0.15, 0.05) * SE3.Rx(-pi/2) #Create the reference image (what the camera sees when perfectly aligned)
+        p_star = cam.project_point(T_desired.inv() * pts_world) #This gives p_star the target pixel coordinates
+
+        depth = 0.15
+        for step in range(max_steps):
+            T_cam = self.barista.fkine(self.barista.q) # Get current camera pose in world
+            pts_cam = T_cam.inv() * pts_world # Transform 3D points from world to current camera frame, then project to pixels
+            uv = cam.project_point(pts_cam)
+            e = (p_star - uv).flatten('F') # Calculate pixel error vector
+
+            # Reads current camera pose T_cam
+            # Converts world points into the camera's local coordinate frame
+            # Projects them through the lens into pixel coordinates
+            # Subtracts current pixels from target pixels (e = p_star - uv)
+            if np.linalg.norm(e) < 5.0:
+                print(f"Visual servoing converged in {step} steps!")
+                break
+            #If the total error is under 5 pixels (equivalent to <0.5 mm physical error), the arm is centered. We stop servoing and move to the grasp.
+
+            # 3-DOF camera translation
+            J_img = cam.visjac_p(uv, depth)[:, :3] #Image Jacobian converts pixel error into camera velocity
+            v_cam = 0.8 * np.linalg.pinv(J_img) @ e
+
+            # Rotate to world frame so up is always up (+Z), right is always right (+X)
+            v_world = np.hstack((T_cam.R @ v_cam, [0, 0, 0]))
+            dq = np.linalg.pinv(self.barista.jacob0(self.barista.q)) @ v_world
+            
+            #Apply joint step to robot
+            self.barista.q += dq * dt
             self.env.step(dt)
 
     def run(self):
