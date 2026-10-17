@@ -214,7 +214,7 @@ class AutomatedCafe:
 
     def barista_pick_up_cup(self):
         target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
-        hover_pose = SE3(self.cup.T) * SE3(0.0, -0.10, 0.23) * SE3.Rx(-pi/2)
+        hover_pose = SE3(self.cup.T) * SE3(0.0, -0.25, 0.16) * SE3.Rx(-pi/2)
         
         ik_hover  = self.barista.ikine_LM(hover_pose,  q0=self.barista.q)
         ik_target = self.barista.ikine_LM(target_pose, q0=ik_hover.q)
@@ -245,61 +245,45 @@ class AutomatedCafe:
             self.env.step(0.05)
             
     def barista_place_cup(self):
+        # 1. Target pose inside the machine bay relative to current pose
         current_pose = self.barista.fkine(self.barista.q)
-        target_pose = SE3(0.27, -0.28, -0.07) * current_pose
+        target_pose = SE3(0.27, -0.12, 0.0) * current_pose
         
-        ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
-        traj_target = jtraj(self.barista.q, ik_target.q, 20)
-            
-        for q_step in traj_target.q:
-            self.barista.q = q_step
-            if self.cup_attached:
-                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
-            self.env.step(0.05)
+        # 2. Pure straight-line insertion using RMRC (replaces ikine_LM + jtraj)
+        self.rmrc_straight_line(target_pose, steps=25)
         
-        traj_raise = jtraj(self.barista.q, self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, 0], 20)
-            
         print("Cup under coffee machine :)")
         self.cup_attached = False
         
-        for q_step in traj_raise.q:
+        # 3. Retract the empty gripper up and away from the cup
+        q_retract = self.barista.q + [0, -50 * pi / 180, 80 * pi / 180, 0, 0, 0]
+        traj_retract = jtraj(self.barista.q, q_retract, 20)
+            
+        for q_step in traj_retract.q:
             self.barista.q = q_step
             self.env.step(0.05)
             
     def barista_get_coffee(self):
+        
+        # 1. Fill cup with coffee
         coffee_color = [0.15, 0.08, 0.03, 1.0]
         self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
         self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
         self.env.add(self.coffee)
         
+        # 2. Regrasp the cup under the tap
         target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
-        traj_target = jtraj(self.barista.q, ik_target.q, 30)
-            
-        for q_step in traj_target.q:
+        for q_step in jtraj(self.barista.q, ik_target.q, 25).q:
             self.barista.q = q_step
             self.env.step(0.05)
-        
-        traj_raise = jtraj(self.barista.q, self.barista.q + [0, -50*pi/180, 80*pi/180, 0, 0, -25*pi/180], 30)
-            
-        print("Cup under coffee machine :)")
         self.cup_attached = True
         
-        for q_step in traj_raise.q:
-            self.barista.q = q_step
-            if self.cup_attached:
-                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
-                self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-            self.env.step(0.05)
-            
-        traj_rot = jtraj(self.barista.q, self.barista.q + [-100*pi/180, 0, 0, 0, 0, 0], 30)
+        # 3. Step 1: Straight horizontal RMRC extraction out of machine bay
+        T_extract = SE3(-0.27, -0.20, 0.0) * self.barista.fkine(self.barista.q)
+        self.rmrc_straight_line(T_extract, steps=25)
         
-        for q_step in traj_rot.q:
-            self.barista.q = q_step
-            if self.cup_attached:
-                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
-                self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-            self.env.step(0.05)
+        
             
     def barista_present_cup_to_dobot(self):
         handover_cup_pose = self.dobot.base * SE3(0.28, 0.0, 0.16)
@@ -385,6 +369,35 @@ class AutomatedCafe:
         for q_step in traj_home.q:
             self.barista.q = q_step
             self.env.step(0.05)
+            
+    def rmrc_straight_line(self, T_goal, steps=25, dt=0.05):
+        """
+        Executes a straight-line Cartesian path using Closed-Loop RMRC with DLS.
+        """
+        p_goal = np.array(T_goal.t)
+
+        for k in range(steps):
+            T_curr = self.barista.fkine(self.barista.q)
+            
+            # Closed-loop velocity: remaining distance / remaining time (eliminates undershoot)
+            rem_time = max((steps - k) * dt, dt) # Remaining time to goal
+            v_lin = (p_goal - np.array(T_curr.t)) / rem_time # Linear velocity vector: straight line from current position to goal
+            xdot = np.hstack((v_lin, np.zeros(3))) # 6D Cartesian velocity: move linearly, but ZERO angular rotation (keep cup level)
+
+            # Jacobian & DLS (tuned for IRB 120 manipulability scale)
+            J = self.barista.jacob0(self.barista.q) # 1. Get the 6x6 Jacobian at current arm position
+            m = np.sqrt(np.linalg.det(J @ J.T)) # 2. Check manipulability (distance to singularity)
+            damping = 0.001 if m < 0.01 else 0.0 # 3. Apply Damped Least Squares if manipulability drops below threshold
+            dq = np.linalg.inv(J.T @ J + damping * np.eye(6)) @ J.T @ xdot # 4. Solve for joint speeds
+
+            self.barista.q += dq * dt # Numerical integration (Euler step): update joint angles
+
+            if self.cup_attached:
+                self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
+                if hasattr(self, 'coffee'):
+                    self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+
+            self.env.step(dt)
 
     def run(self):
         """
