@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from math import pi
 import swift
@@ -8,7 +9,6 @@ from ir_support.robots import DobotMagician
 from ir_support_extra_parts.parts import part_mesh 
 import os
 import sys
-import numpy as np
 sys.modules['numpy.char'] = np.char 
 from machinevisiontoolbox import CentralCamera
 
@@ -47,6 +47,18 @@ class AutomatedCafe:
         """
         self.env = swift.Swift()
         self.env.launch(realtime=True)
+
+        self.estop_active = False
+        self.sensor_breached = False
+        self.is_running = False
+
+        # Guard env.step globally against E-stop and safety sensor pauses
+        orig_step = self.env.step
+        def guarded_step(dt=0.05):
+            while self.estop_active or self.sensor_breached:
+                time.sleep(0.05)
+            orig_step(dt)
+        self.env.step = guarded_step
         
         self.barista = ABB_IRB120()
         
@@ -487,19 +499,24 @@ class AutomatedCafe:
             self.barista.q += dq * dt
             self.env.step(dt)
 
+    def run_sequence(self):
+        """
+        Executes the full automated barista sequence.
+        """
+        self.barista_pick_up_cup()
+        self.barista_place_cup()
+        self.barista_get_coffee()
+        self.barista_present_cup_to_dobot()
+        self.dobot_pour_milk()
+        self.barista_serve_coffee()
+
     def run(self):
         """
         Main execution loop for Rowan's Barista robot and Dobot milk pouring interaction.
         """
         print("Rowan's Barista Simulation Running... Close browser to exit.")
         try:
-            self.barista_pick_up_cup()
-            self.barista_place_cup()
-            self.barista_get_coffee()
-            self.barista_present_cup_to_dobot()
-            self.dobot_pour_milk()
-            self.barista_serve_coffee()
-            
+            self.run_sequence()
             while True:
                 self.env.step(0.05)
         except KeyboardInterrupt:
@@ -507,4 +524,9 @@ class AutomatedCafe:
 
 if __name__ == "__main__":
     cafe = AutomatedCafe()
-    cafe.run()
+    if "--no-gui" in sys.argv:
+        cafe.run()
+    else:
+        from barista_gui import BaristaGUI
+        gui = BaristaGUI(cafe)
+        gui.run()
