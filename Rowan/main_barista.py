@@ -212,6 +212,33 @@ class AutomatedCafe:
         self.estop = part_mesh("emergencyStopWallMounted")
         self.estop.T = SE3(-1.77, -0.6, 1.4) * SE3.Rz(-pi/2)
         self.env.add(self.estop)
+        
+        # Cleaning spray bottle (deliberate obstacle 
+        self.bottle = Cylinder(radius=0.045, length=0.15, color=[0.9, 0.2, 0.2, 0.85])
+        self.bottle.T = SE3(-0.50, -0.20, 0.97 + 0.075)
+        self.env.add(self.bottle)
+
+        # Visual bounding box
+        r_box = getattr(self.bottle, 'radius', 0.045) + 0.02
+        h_box = getattr(self.bottle, 'length', 0.15) + 0.04
+        self.bottle_bbox = Box(scale=[2 * r_box, 2 * r_box, h_box], color=[1.0, 0.2, 0.2, 0.25])
+        self.bottle_bbox.T = self.bottle.T
+        self.env.add(self.bottle_bbox)
+
+    @property
+    def obstacle_box(self):
+        """Dynamic axis-aligned bounding box [xmin, xmax, ymin, ymax, zmin, zmax] sticking to bottle."""
+        p = SE3(self.bottle.T).t
+        r = getattr(self.bottle, 'radius', 0.045) + 0.02
+        h = getattr(self.bottle, 'length', 0.15) / 2 + 0.02
+        return [p[0] - r, p[0] + r, p[1] - r, p[1] + r, p[2] - h, p[2] + h]
+
+    def move_obstacle(self, x, y, z=None):
+        """Move the obstacle bottle and automatically snap the visual bounding box to it."""
+        z = (0.97 + 0.075) if z is None else z
+        self.bottle.T = SE3(x, y, z)
+        if hasattr(self, 'bottle_bbox'):
+            self.bottle_bbox.T = self.bottle.T
 
     def barista_pick_up_cup(self):
 
@@ -288,7 +315,7 @@ class AutomatedCafe:
         ee_target = handover_cup_pose * self.cup_offset.inv()
         ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q)
         
-        traj_present = jtraj(self.barista.q, ik_present.q, 30)
+        traj_present = jtraj(self.barista.q, ik_present.q, 50)
         for q_step in traj_present.q:
             self.barista.q = q_step
             if self.cup_attached:
@@ -337,11 +364,32 @@ class AutomatedCafe:
         ik_serve = self.barista.ikine_LM(ee_target, q0=ik_hover.q)
         ik_retract = self.barista.ikine_LM(ee_hover, q0=ik_serve.q)
 
-        traj_hover = jtraj(self.barista.q, ik_hover.q, 30)
+        # Parametric collision avoidance: derive obstacle bounds and clearance dynamically from bottle
+        if hasattr(self, 'bottle_bbox'):
+            self.bottle_bbox.T = self.bottle.T
+        p_obs = SE3(self.bottle.T).t
+        r_obs = getattr(self.bottle, 'radius', 0.045) + 0.02
+        h_obs = getattr(self.bottle, 'length', 0.15) / 2 + 0.02
+        in_box = lambda p: (p_obs[0] - r_obs <= p[0] <= p_obs[0] + r_obs) and \
+                           (p_obs[1] - r_obs <= p[1] <= p_obs[1] + r_obs) and \
+                           (p_obs[2] - h_obs <= p[2] <= p_obs[2] + h_obs)
+
+        traj_nominal = jtraj(self.barista.q, ik_hover.q, 30)
+
+        if any(in_box((self.barista.fkine(q) * self.cup_offset).t) for q in traj_nominal.q):
+            print(f"Collision detected with obstacle at {np.round(p_obs[:2], 2)}! Replanning detour...")
+            z_detour = p_obs[2] + getattr(self.bottle, 'length', 0.15) / 2 + 0.23
+            ee_detour = SE3(p_obs[0], p_obs[1], z_detour) * SE3.Rz(pi/2) * self.cup_offset.inv()
+            q_detour = self.barista.ikine_LM(ee_detour, q0=self.barista.q).q
+            traj_hover_q = np.vstack((jtraj(self.barista.q, q_detour, 20).q, jtraj(q_detour, ik_hover.q, 20).q))
+        else:
+            print("Path clear. Proceeding along nominal trajectory...")
+            traj_hover_q = traj_nominal.q
+
         traj_serve = jtraj(ik_hover.q, ik_serve.q, 15)
         traj_retract = jtraj(ik_serve.q, ik_retract.q, 15)
 
-        for q_step in traj_hover.q:
+        for q_step in traj_hover_q:
             self.barista.q = q_step
             self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
             self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
