@@ -51,15 +51,13 @@ class AutomatedCafe:
         self.estop_active = False
         self.sensor_breached = False
         self.is_running = False
+        self.cup_attached = False
 
         # Guard env.step globally against E-stop and safety sensor pauses
         orig_step = self.env.step
         def guarded_step(dt=0.05):
-            self.update_safety_visuals()
             while self.estop_active or self.sensor_breached:
-                self.update_safety_visuals()
                 time.sleep(0.05)
-            self.update_safety_visuals()
             orig_step(dt)
         self.env.step = guarded_step
         
@@ -208,7 +206,7 @@ class AutomatedCafe:
         menu_board.T = SE3(-1.75, 0.2, 1.9)
         self.env.add(menu_board)
 
-        # Cafe Lounge Seating: Tufted Leather Sofa & Round Marble Coffee Table
+        # Cafe Lounge Seating
         sofa_path = os.path.join(base_path, "Workcell meshes", "Sofa", "sofa.stl")
         sofa = Mesh(sofa_path, color=[0.36, 0.22, 0.14, 1.0])
         sofa.T = SE3(3.4, -2.5, 0.0) * SE3.Rz(-pi / 2) * SE3.Rx(pi / 2)
@@ -230,7 +228,7 @@ class AutomatedCafe:
         lounge_chair2.T = SE3(1.6, -2.9, 0.0) * SE3.Rz(0.46 - pi) * chair_base_rot
         self.env.add(lounge_chair2)
 
-        # Potted Plants (Greenery Accents)
+        # Potted Plants 
         plant_path = os.path.join(base_path, "Workcell meshes", "Plant", "plant.stl")
         plant_lounge = Mesh(plant_path, color=[0.22, 0.52, 0.26, 1.0], scale=[0.9, 0.9, 0.9])
         plant_lounge.T = SE3(3.4, -1.3, 0.0) * SE3.Rx(pi / 2)
@@ -244,7 +242,7 @@ class AutomatedCafe:
         plant_dining.T = SE3(1.1, 2.8, 0.0) * SE3.Rx(pi / 2)
         self.env.add(plant_dining)
 
-        # High-Top Bistro & Dining Area
+        # Dining Area
         table1 = part_mesh("StandingBarTable")
         table1.T = SE3(2.2, 2.5, 0.0)
         self.env.add(table1)
@@ -269,7 +267,7 @@ class AutomatedCafe:
         chair_bar4.T = SE3(3.3, 1.8, 0.0) * SE3.Rz(-pi / 2) * chair_base_rot
         self.env.add(chair_bar4)
 
-        # Customers / Patrons
+        # Customers
         customer1 = part_mesh("personMaleCasual") 
         customer1.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
         self.env.add(customer1)
@@ -304,17 +302,17 @@ class AutomatedCafe:
         beam_barista.T = SE3(0.75, 0.425, 1.15)
         self.env.add(beam_barista)
 
-        # Barista Light Curtain (Coffee Machine outer flank side)
+        # Barista Light Curtain (covering full outer flank side of counter and bench)
         curtain_flank_p1 = part_mesh("SafetyLightCurtain")
         curtain_flank_p1.T = SE3(0.74, 0.86, 0.97) * SE3.Rz(pi/2)
         self.env.add(curtain_flank_p1)
 
         curtain_flank_p2 = part_mesh("SafetyLightCurtain")
-        curtain_flank_p2.T = SE3(0.15, 0.86, 0.97) * SE3.Rz(-pi/2)
+        curtain_flank_p2.T = SE3(-1.45, 0.86, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_flank_p2)
 
-        beam_flank = Box(scale=[0.59, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_flank.T = SE3(0.445, 0.86, 1.15)
+        beam_flank = Box(scale=[2.19, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(-0.355, 0.86, 1.15)
         self.env.add(beam_flank)
 
         # Side Wing Light Curtain (covering full side counter wing)
@@ -333,7 +331,7 @@ class AutomatedCafe:
         # Keep beams together safety updates
         self.curtain_beams = [beam_barista, beam_flank, beam_wing]
 
-        # 2. Status Light Tower set back behind counter with Active Beacon
+        # Status Light Tower + Beacon
         light_tower = part_mesh("LightTower")
         light_tower.T = SE3(-0.05, -1.65, 0.97)
         self.env.add(light_tower)
@@ -342,12 +340,7 @@ class AutomatedCafe:
         self.beacon.T = SE3(-0.05, -1.65, 1.45)
         self.env.add(self.beacon)
 
-        # 3. Perimeter Barrier along back cell boundary
-        barrier = part_mesh("barrier1.5x0.2x1m")
-        barrier.T = SE3(-1.5, 0.5, 0.0) * SE3.Rz(pi/2)
-        self.env.add(barrier)
-
-        # 4. Wall Shelf with Mounted Fire Extinguisher
+        # Wall Shelf with Mounted Fire Extinguisher
         self.wall_shelf = Box(scale=[0.22, 0.30, 0.025], color=[0.35, 0.25, 0.18, 1.0])
         self.wall_shelf.T = SE3(-1.70, -1.0, 1.25)
         self.env.add(self.wall_shelf)
@@ -356,7 +349,7 @@ class AutomatedCafe:
         fire_ext.T = SE3(-1.68, -1.0, 1.27)
         self.env.add(fire_ext)
 
-        # 5. Caution Sign standing on floor
+        #Caution Sign standing on floor
         warning_sign = part_mesh("WarningSign")
         warning_sign.T = SE3(-1.5, 0.7, 0.0)
         self.env.add(warning_sign)
@@ -389,23 +382,29 @@ class AutomatedCafe:
             self.bottle_bbox.T = self.bottle.T
 
     def update_safety_visuals(self):
-        """Update 3D light curtain beams and status beacon colors based on safety state."""
-        beam_color = [1.0, 0.0, 0.0, 0.55] if self.sensor_breached else [0.0, 0.8, 1.0, 0.25]
-        for beam in getattr(self, 'curtain_beams', []):
-            beam.color = beam_color
-        if hasattr(self, 'beacon') and self.beacon is not None:
-            if self.estop_active:
-                self.beacon.color = [1.0, 0.0, 0.0, 0.95]
-            elif self.sensor_breached:
-                self.beacon.color = [1.0, 0.6, 0.0, 0.95]
-            else:
-                self.beacon.color = [0.0, 1.0, 0.0, 0.95]
+        """No-op: Swift WebSocket protocol does not support dynamic mesh color updates."""
+        pass
 
     def press_physical_estop(self):
         """Simulates physical E-stop push button press."""
         self.estop_active = True
-        self.update_safety_visuals()
         print("[SAFETY] Physical Emergency Stop pressed - robot halted.")
+
+    def reset_simulation(self):
+        """Reset robots, objects, and safety states back to initial conditions."""
+        self.estop_active = False
+        self.sensor_breached = False
+        self.is_running = False
+        self.cup_attached = False
+        self.barista.q = np.zeros(6)
+        self.dobot.q = self.dobot_q_ready.copy()
+        self.jug.T = self.dobot.fkine(self.dobot.q) * self.jug_offset
+        self.cup.T = SE3(0, 0.6, 0.97)
+        if hasattr(self, 'coffee'):
+            self.coffee.T = SE3(0, 0, -10)
+        if hasattr(self, 'milk'):
+            self.milk.T = SE3(0, 0, -10)
+        self.env.step(0.05)
 
     def barista_pick_up_cup(self):
 
@@ -462,9 +461,10 @@ class AutomatedCafe:
     def barista_get_coffee(self):
         
         coffee_color = [0.15, 0.08, 0.03, 1.0]
-        self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
+        if not hasattr(self, 'coffee'):
+            self.coffee = Cylinder(radius=0.06, length=0.02, color=coffee_color)
+            self.env.add(self.coffee)
         self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-        self.env.add(self.coffee)
         
         target_pose = SE3(self.cup.T) * SE3(0.0, -0.11, 0.06) * SE3.Rx(-pi/2)
         ik_target = self.barista.ikine_LM(target_pose, q0=self.barista.q)
@@ -512,9 +512,10 @@ class AutomatedCafe:
         q_pour[3] += 25 * pi / 180
         move(q_pour, 15)
 
-        self.milk = Cylinder(radius=0.058, length=0.015, color=[0.55, 0.36, 0.20, 1.0])
+        if not hasattr(self, 'milk'):
+            self.milk = Cylinder(radius=0.058, length=0.015, color=[0.55, 0.36, 0.20, 1.0])
+            self.env.add(self.milk)
         self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
-        self.env.add(self.milk)
         print("Dobot poured milk into the cup <3")
 
         move(q_reach, 15)
@@ -531,24 +532,41 @@ class AutomatedCafe:
         ik_serve = self.barista.ikine_LM(ee_target, q0=ik_hover.q)
         ik_retract = self.barista.ikine_LM(ee_hover, q0=ik_serve.q)
 
-        # Parametric collision avoidance: derive obstacle bounds and clearance dynamically from bottle
+        # Collision Avoidance  
+        # Update visual bounding box transform to match obstacle
         if hasattr(self, 'bottle_bbox'):
             self.bottle_bbox.T = self.bottle.T
-        p_obs = SE3(self.bottle.T).t
-        r_obs = getattr(self.bottle, 'radius', 0.045) + 0.02
-        h_obs = getattr(self.bottle, 'length', 0.15) / 2 + 0.02
+
+        # Extract obstacle position and compute bounding box with safety margins
+        p_obs = SE3(self.bottle.T).t                            # Obstacle center [x, y, z] in world frame
+        r_obs = getattr(self.bottle, 'radius', 0.045) + 0.02    # Obstacle radius + 20mm safety clearance
+        h_obs = getattr(self.bottle, 'length', 0.15) / 2 + 0.02  # Half-height + 20mm safety clearance
+
+        # Check if a 3D Cartesian point lies inside the bounding box volume
         in_box = lambda p: (p_obs[0] - r_obs <= p[0] <= p_obs[0] + r_obs) and \
                            (p_obs[1] - r_obs <= p[1] <= p_obs[1] + r_obs) and \
                            (p_obs[2] - h_obs <= p[2] <= p_obs[2] + h_obs)
 
+        # Generate nominal direct joint trajectory toward tray hover pose
         traj_nominal = jtraj(self.barista.q, ik_hover.q, 30)
 
-        if any(in_box((self.barista.fkine(q) * self.cup_offset).t) for q in traj_nominal.q):
+        #Check every step along trajectory for cup collision via Forward Kinematics
+        collision = any(in_box((self.barista.fkine(q) * self.cup_offset).t) for q in traj_nominal.q)
+
+        if collision:
             print(f"Collision detected with obstacle at {np.round(p_obs[:2], 2)}! Replanning detour...")
+
+            # Calculate safe clearance height directly above the obstacle
             z_detour = p_obs[2] + getattr(self.bottle, 'length', 0.15) / 2 + 0.23
+            
+            # Formulate detour target pose directly over obstacle and solve IK
             ee_detour = SE3(p_obs[0], p_obs[1], z_detour) * SE3.Rz(pi/2) * self.cup_offset.inv()
             q_detour = self.barista.ikine_LM(ee_detour, q0=self.barista.q).q
-            traj_hover_q = np.vstack((jtraj(self.barista.q, q_detour, 20).q, jtraj(q_detour, ik_hover.q, 20).q))
+
+            # Splice trajectory into two safe segments: current -> detour -> hover
+            traj_to_detour = jtraj(self.barista.q, q_detour, 20).q
+            traj_to_hover  = jtraj(q_detour, ik_hover.q, 20).q
+            traj_hover_q = np.vstack((traj_to_detour, traj_to_hover))
         else:
             print("Path clear. Proceeding along nominal trajectory...")
             traj_hover_q = traj_nominal.q
