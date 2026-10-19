@@ -89,8 +89,8 @@ class AutomatedCafe:
         self.env.add(self.counter)
         
         # Plank Tabletop
-        tabletop = Box(scale=[1.8, 2.2, 0.05], color=[0.35, 0.25, 0.15, 1.0])
-        tabletop.T = SE3(-0.6, -0.2, 0.95)
+        tabletop = Box(scale=[1.8, 2.2, 0.97], color=[0.35, 0.25, 0.15, 1.0])
+        tabletop.T = SE3(-0.6, -0.2, 0.49)
         self.env.add(tabletop)
 
         #Coffee Machine
@@ -171,39 +171,161 @@ class AutomatedCafe:
         self.croissant = self.roll
         self.roll_attached = False
         
-        #\\\Environment///
-
-        floor = Box(scale=[6.0, 7.0, 0.02], color=[0.25, 0.18, 0.12, 1.0])
-        floor.T = SE3(0.0, -0.5, 0.001)
+        # Environment Props - Cafe Floor & Walls
+        floor = Box(scale=[8.5, 9.0, 0.02], color=[0.34, 0.24, 0.16, 1.0])
+        floor.T = SE3(0.75, -0.5, 0.001)
         self.env.add(floor)
         
-        back_wall = Box(scale=[0.05, 5.0, 2.6], color=[0.85, 0.82, 0.78, 1.0])
+        back_wall = Box(scale=[0.05, 9.0, 2.6], color=[0.88, 0.86, 0.82, 1.0])
         back_wall.T = SE3(-1.8, -0.5, 1.3)
         self.env.add(back_wall)
         
         menu_board = Box(scale=[0.02, 1.4, 0.8], color=[0.12, 0.12, 0.12, 1.0])
         menu_board.T = SE3(-1.75, 0.2, 1.9)
         self.env.add(menu_board)
-        
-        table = part_mesh("StandingBarTable")
-        table.T = SE3(2.1, 2.5, 0.0)
-        self.env.add(table)
 
-        chair = part_mesh("chair")
-        chair.T = SE3(2.5, 2.5, 0.0) * SE3.Ry(-pi / 2)* SE3.Rz(-pi / 2)
-        self.env.add(chair)
-        
-        customer = part_mesh("personMaleCasual") 
-        customer.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
-        self.env.add(customer)
+        # Cafe Lounge Seating: Tufted Leather Sofa & Round Marble Coffee Table
+        sofa_path = os.path.join(base_path, "Workcell meshes", "Sofa", "sofa.stl")
+        sofa = Mesh(sofa_path, color=[0.36, 0.22, 0.14, 1.0])
+        sofa.T = SE3(3.4, -2.5, 0.0) * SE3.Rz(-pi / 2) * SE3.Rx(pi / 2)
+        self.env.add(sofa)
+
+        coffee_table_path = os.path.join(base_path, "Workcell meshes", "CoffeeTable", "coffee_table.stl")
+        coffee_table = Mesh(coffee_table_path, color=[0.94, 0.93, 0.90, 1.0], scale=[0.85, 0.85, 0.85])
+        coffee_table.T = SE3(2.4, -2.5, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(coffee_table)
+
+        # Base orientation for upright chair model: SE3.Ry(-pi/2) * SE3.Rz(-pi/2) faces -X
+        chair_base_rot = SE3.Ry(-pi / 2) * SE3.Rz(-pi / 2)
+
+        lounge_chair1 = part_mesh("chair")
+        lounge_chair1.T = SE3(1.6, -2.1, 0.0) * SE3.Rz(-0.46 - pi) * chair_base_rot
+        self.env.add(lounge_chair1)
+
+        lounge_chair2 = part_mesh("chair")
+        lounge_chair2.T = SE3(1.6, -2.9, 0.0) * SE3.Rz(0.46 - pi) * chair_base_rot
+        self.env.add(lounge_chair2)
+
+        # Potted Plants (Greenery Accents)
+        plant_path = os.path.join(base_path, "Workcell meshes", "Plant", "plant.stl")
+        plant_lounge = Mesh(plant_path, color=[0.22, 0.52, 0.26, 1.0], scale=[0.9, 0.9, 0.9])
+        plant_lounge.T = SE3(3.4, -1.3, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(plant_lounge)
+
+        plant_entry = Mesh(plant_path, color=[0.25, 0.50, 0.22, 1.0], scale=[0.8, 0.8, 0.8])
+        plant_entry.T = SE3(0.8, -2.8, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(plant_entry)
+
+        plant_dining = Mesh(plant_path, color=[0.20, 0.55, 0.28, 1.0], scale=[0.85, 0.85, 0.85])
+        plant_dining.T = SE3(1.1, 2.8, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(plant_dining)
+
+        # High-Top Bistro & Dining Area
+        table1 = part_mesh("StandingBarTable")
+        table1.T = SE3(2.2, 2.5, 0.0)
+        self.env.add(table1)
+
+        chair_bar1 = part_mesh("chair")
+        chair_bar1.T = SE3(2.6, 2.5, 0.0) * chair_base_rot
+        self.env.add(chair_bar1)
+
+        chair_bar2 = part_mesh("chair")
+        chair_bar2.T = SE3(1.8, 2.5, 0.0) * SE3.Rz(pi) * chair_base_rot
+        self.env.add(chair_bar2)
+
+        table2 = part_mesh("StandingBarTable")
+        table2.T = SE3(3.3, 1.4, 0.0)
+        self.env.add(table2)
+
+        chair_bar3 = part_mesh("chair")
+        chair_bar3.T = SE3(3.7, 1.4, 0.0) * chair_base_rot
+        self.env.add(chair_bar3)
+
+        chair_bar4 = part_mesh("chair")
+        chair_bar4.T = SE3(3.3, 1.8, 0.0) * SE3.Rz(-pi / 2) * chair_base_rot
+        self.env.add(chair_bar4)
+
+        # Customers / Patrons
+        customer1 = part_mesh("personMaleCasual") 
+        customer1.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
+        self.env.add(customer1)
+
+        customer2 = part_mesh("personFemaleBusiness")
+        customer2.T = SE3(2.2, 1.9, 0.0)
+        self.env.add(customer2)
+
+        customer3 = part_mesh("personMaleOld")
+        customer3.T = SE3(3.4, -0.6, 0.0) * SE3.Rz(-pi/2)
+        self.env.add(customer3)
         
         takeaway_cup = part_mesh("TakeawayCup")
         takeaway_cup.T = SE3(0.5, -0.1, 0.97)
         self.env.add(takeaway_cup)
         
         self.estop = part_mesh("emergencyStopWallMounted")
-        self.estop.T = SE3(-1.77, -0.6, 1.4)*SE3.Rz(-pi/2)
+        self.estop.T = SE3(-1.77, -0.6, 1.4) * SE3.Rz(-pi/2)
         self.env.add(self.estop)
+
+        # Safety Equipment 3D Models
+        # Barista Light Curtain (Coffee Machine front side)
+        curtain_barista_p1 = part_mesh("SafetyLightCurtain")
+        curtain_barista_p1.T = SE3(0.75, 0.05, 0.97)
+        self.env.add(curtain_barista_p1)
+
+        curtain_barista_p2 = part_mesh("SafetyLightCurtain")
+        curtain_barista_p2.T = SE3(0.75, 0.80, 0.97)
+        self.env.add(curtain_barista_p2)
+
+        beam_barista = Box(scale=[0.01, 0.75, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_barista.T = SE3(0.75, 0.425, 1.15)
+        self.env.add(beam_barista)
+
+        # Barista Light Curtain (covering full outer flank side of counter and bench)
+        curtain_flank_p1 = part_mesh("SafetyLightCurtain")
+        curtain_flank_p1.T = SE3(0.74, 0.86, 0.97) * SE3.Rz(pi/2)
+        self.env.add(curtain_flank_p1)
+
+        curtain_flank_p2 = part_mesh("SafetyLightCurtain")
+        curtain_flank_p2.T = SE3(-1.45, 0.86, 0.97) * SE3.Rz(-pi/2)
+        self.env.add(curtain_flank_p2)
+
+        beam_flank = Box(scale=[2.19, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(-0.355, 0.86, 1.15)
+        self.env.add(beam_flank)
+
+        # Side Wing Light Curtain (covering full side counter wing)
+        curtain_wing_p1 = part_mesh("SafetyLightCurtain")
+        curtain_wing_p1.T = SE3(0.18, -1.75, 0.97) * SE3.Rz(pi/2)
+        self.env.add(curtain_wing_p1)
+
+        curtain_wing_p2 = part_mesh("SafetyLightCurtain")
+        curtain_wing_p2.T = SE3(-0.80, -1.75, 0.97) * SE3.Rz(-pi/2)
+        self.env.add(curtain_wing_p2)
+
+        beam_wing = Box(scale=[0.98, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_wing.T = SE3(-0.31, -1.75, 1.15)
+        self.env.add(beam_wing)
+
+        # Keep beams together safety updates
+        self.curtain_beams = [beam_barista, beam_flank, beam_wing]
+
+        # Status Light Tower + Beacon
+        light_tower = part_mesh("LightTower")
+        light_tower.T = SE3(-0.05, -1.65, 0.97)
+        self.env.add(light_tower)
+
+        self.beacon = Cylinder(radius=0.03, length=0.07, color=[0.0, 1.0, 0.0, 0.95])
+        self.beacon.T = SE3(-0.05, -1.65, 1.45)
+        self.env.add(self.beacon)
+
+        # Wall Shelf with Mounted Fire Extinguisher
+        self.wall_shelf = Box(scale=[0.22, 0.30, 0.025], color=[0.35, 0.25, 0.18, 1.0])
+        self.wall_shelf.T = SE3(-1.70, -1.0, 1.25)
+        self.env.add(self.wall_shelf)
+
+        fire_ext = part_mesh("FireExtinguisher")
+        fire_ext.T = SE3(-1.68, -1.0, 1.27)
+        self.env.add(fire_ext)
         
         
         

@@ -304,17 +304,17 @@ class AutomatedCafe:
         beam_barista.T = SE3(0.75, 0.425, 1.15)
         self.env.add(beam_barista)
 
-        # Barista Light Curtain (Coffee Machine outer flank side)
+        # Barista Light Curtain (covering full outer flank side of counter and bench)
         curtain_flank_p1 = part_mesh("SafetyLightCurtain")
         curtain_flank_p1.T = SE3(0.74, 0.86, 0.97) * SE3.Rz(pi/2)
         self.env.add(curtain_flank_p1)
 
         curtain_flank_p2 = part_mesh("SafetyLightCurtain")
-        curtain_flank_p2.T = SE3(0.15, 0.86, 0.97) * SE3.Rz(-pi/2)
+        curtain_flank_p2.T = SE3(-1.45, 0.86, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_flank_p2)
 
-        beam_flank = Box(scale=[0.59, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_flank.T = SE3(0.445, 0.86, 1.15)
+        beam_flank = Box(scale=[2.19, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(-0.355, 0.86, 1.15)
         self.env.add(beam_flank)
 
         # Side Wing Light Curtain (covering full side counter wing)
@@ -333,7 +333,7 @@ class AutomatedCafe:
         # Keep beams together safety updates
         self.curtain_beams = [beam_barista, beam_flank, beam_wing]
 
-        # 2. Status Light Tower set back behind counter with Active Beacon
+        # Status Light Tower + Beacon
         light_tower = part_mesh("LightTower")
         light_tower.T = SE3(-0.05, -1.65, 0.97)
         self.env.add(light_tower)
@@ -342,12 +342,7 @@ class AutomatedCafe:
         self.beacon.T = SE3(-0.05, -1.65, 1.45)
         self.env.add(self.beacon)
 
-        # 3. Perimeter Barrier along back cell boundary
-        barrier = part_mesh("barrier1.5x0.2x1m")
-        barrier.T = SE3(-1.5, 0.5, 0.0) * SE3.Rz(pi/2)
-        self.env.add(barrier)
-
-        # 4. Wall Shelf with Mounted Fire Extinguisher
+        # Wall Shelf with Mounted Fire Extinguisher
         self.wall_shelf = Box(scale=[0.22, 0.30, 0.025], color=[0.35, 0.25, 0.18, 1.0])
         self.wall_shelf.T = SE3(-1.70, -1.0, 1.25)
         self.env.add(self.wall_shelf)
@@ -356,7 +351,7 @@ class AutomatedCafe:
         fire_ext.T = SE3(-1.68, -1.0, 1.27)
         self.env.add(fire_ext)
 
-        # 5. Caution Sign standing on floor
+        #Caution Sign standing on floor
         warning_sign = part_mesh("WarningSign")
         warning_sign.T = SE3(-1.5, 0.7, 0.0)
         self.env.add(warning_sign)
