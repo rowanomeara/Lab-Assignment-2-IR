@@ -457,9 +457,10 @@ class AutomatedCafe:
         
         ee_target = handover_cup_pose * self.cup_offset.inv()
         
-        ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q)
+        ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q, slimit=1)
+        q_present = (ik_present.q + pi) % (2 * pi) - pi
         
-        traj_present = jtraj(self.barista.q, ik_present.q, 30)
+        traj_present = jtraj(self.barista.q, q_present, 30)
         for q_step in traj_present.q:
             self.barista.q = q_step
             if self.cup_attached:
@@ -482,8 +483,8 @@ class AutomatedCafe:
         T_cup_rim = (SE3(self.cup.T) * SE3(-0.05, 0.0, 0.125)).t
         T_ee_target = SE3(T_cup_rim - [0.156, 0.0, 0.080]) * SE3.Rx(pi)
 
-        sol_reach = self.dobot.ikine_LM(T_ee_target, q0=self.dobot.q, mask=[1, 1, 1, 0, 0, 0])
-        q_reach = sol_reach.q.copy()
+        sol_reach = self.dobot.ikine_LM(T_ee_target, q0=self.dobot.q, mask=[1, 1, 1, 0, 0, 0], slimit=1)
+        q_reach = (sol_reach.q + pi) % (2 * pi) - pi
         q_reach[3] = -(q_reach[1] + q_reach[2])
 
         move(q_reach, 20)
@@ -509,7 +510,7 @@ class AutomatedCafe:
         ee_hover = hover_cup * SE3.Rz(pi) * self.cup_offset.inv()
         ee_target = target_cup * SE3.Rz(pi) * self.cup_offset.inv()
 
-        ik_hover = self.barista.ikine_LM(ee_hover, q0=self.barista.q)
+        ik_hover = self.barista.ikine_LM(ee_hover, q0=[-1.48, 0.74, 0.60, 0.10, -1.34, 1.55])
         ik_serve = self.barista.ikine_LM(ee_target, q0=ik_hover.q)
         ik_retract = self.barista.ikine_LM(ee_hover, q0=ik_serve.q)
 
@@ -711,26 +712,24 @@ class AutomatedCafe:
         # Lift tray straight up using RMRC (keeps coffee and roll completely level)
         self.staubli_rmrc(T_lift_tray, steps=20)
 
-        q_swing = np.array([0.10, self.staubli.q[1], self.staubli.q[2], self.staubli.q[3], self.staubli.q[4], self.staubli.q[5]])
-        traj_swing = jtraj(self.staubli.q, q_swing, 25)
-
-        for q_step in traj_swing.q:
-            self.staubli.q = q_step
-            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
-            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
-            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
-            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
-            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
-            self.env.step(0.05)
-
         T_hover_place = SE3(0.59, -0.51, 1.25) * SE3.Rz(pi/2) * SE3.Ry(pi)
         T_place_tray  = SE3(0.59, -0.51, 1.022) * SE3.Rz(pi/2) * SE3.Ry(pi)
 
-        ik_hover_place = self.staubli.ikine_LM(T_hover_place, q0=self.staubli.q)
-        traj_hover_place = jtraj(self.staubli.q, ik_hover_place.q, 15)
+        ik_hover_place = self.staubli.ikine_LM(T_hover_place, q0=[0.10, 0.54, 2.12, 0.0, 0.49, -1.47])
+        q_nominal = ik_hover_place.q + np.array([0.0, 0.0, 0.0, 0.0, 0.0, 2 * pi])
+        traj_nominal = jtraj(self.staubli.q, q_nominal, 30)
 
-        for q_step in traj_hover_place.q:
+        # Check nominal swing path against Coffee Machine bounding box (with tray radius margin)
+        in_machine_box = lambda p: (0.05 <= p[0] <= 0.75) and (-0.05 <= p[1] <= 0.85) and (0.97 <= p[2] <= 1.55)
+
+        if any(in_machine_box((self.staubli.fkine(q) * self.tray_offset).t) for q in traj_nominal.q):
+            print("Collision detected with coffee machine! Replanning safe detour...")
+            q_safe = ik_hover_place.q + np.array([2 * pi, 0.0, 0.0, 0.0, 0.0, 2 * pi])
+            traj_carry = jtraj(self.staubli.q, q_safe, 30)
+        else:
+            traj_carry = traj_nominal
+
+        for q_step in traj_carry.q:
             self.staubli.q = q_step
             self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
             self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
@@ -748,6 +747,7 @@ class AutomatedCafe:
 
         # Retract straight up from counter using RMRC
         self.staubli_rmrc(T_hover_place, steps=20)
+        self.staubli.q = (self.staubli.q + pi) % (2 * pi) - pi
 
         T_hover_bell = SE3(self.bell.T) * SE3(0.0, 0.0, 0.148) * SE3.Ry(pi)
         T_tap_bell   = SE3(self.bell.T) * SE3(0.0, 0.0, 0.06) * SE3.Ry(pi)
@@ -755,9 +755,9 @@ class AutomatedCafe:
         ik_hover_bell = self.staubli.ikine_LM(T_hover_bell, q0=[-1.0, 1.4, 0.8, 0.0, 0.9, -1.0])
         ik_tap_bell   = self.staubli.ikine_LM(T_tap_bell,   q0=ik_hover_bell.q)
 
-        traj_to_bell  = jtraj(self.staubli.q,    ik_hover_bell.q, 20)
-        traj_tap_down = jtraj(ik_hover_bell.q,   ik_tap_bell.q,   5)
-        traj_tap_up   = jtraj(ik_tap_bell.q,     ik_hover_bell.q, 5)
+        traj_to_bell  = jtraj(self.staubli.q,  ik_hover_bell.q, 20)
+        traj_tap_down = jtraj(ik_hover_bell.q, ik_tap_bell.q,   5)
+        traj_tap_up   = jtraj(ik_tap_bell.q,   ik_hover_bell.q, 5)
 
         for q_step in traj_to_bell.q:
             self.staubli.q = q_step
