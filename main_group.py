@@ -184,7 +184,7 @@ class AutomatedCafe:
         menu_board.T = SE3(-1.75, 0.2, 1.9)
         self.env.add(menu_board)
 
-        # Cafe Lounge Seating: Tufted Leather Sofa & Round Marble Coffee Table
+        # Cafe Lounge Seating
         sofa_path = os.path.join(base_path, "Workcell meshes", "Sofa", "sofa.stl")
         sofa = Mesh(sofa_path, color=[0.36, 0.22, 0.14, 1.0])
         sofa.T = SE3(3.4, -2.5, 0.0) * SE3.Rz(-pi / 2) * SE3.Rx(pi / 2)
@@ -206,7 +206,7 @@ class AutomatedCafe:
         lounge_chair2.T = SE3(1.6, -2.9, 0.0) * SE3.Rz(0.46 - pi) * chair_base_rot
         self.env.add(lounge_chair2)
 
-        # Potted Plants (Greenery Accents)
+        # Potted Plants 
         plant_path = os.path.join(base_path, "Workcell meshes", "Plant", "plant.stl")
         plant_lounge = Mesh(plant_path, color=[0.22, 0.52, 0.26, 1.0], scale=[0.9, 0.9, 0.9])
         plant_lounge.T = SE3(3.4, -1.3, 0.0) * SE3.Rx(pi / 2)
@@ -220,7 +220,7 @@ class AutomatedCafe:
         plant_dining.T = SE3(1.1, 2.8, 0.0) * SE3.Rx(pi / 2)
         self.env.add(plant_dining)
 
-        # High-Top Bistro & Dining Area
+        # Dining Area
         table1 = part_mesh("StandingBarTable")
         table1.T = SE3(2.2, 2.5, 0.0)
         self.env.add(table1)
@@ -245,7 +245,7 @@ class AutomatedCafe:
         chair_bar4.T = SE3(3.3, 1.8, 0.0) * SE3.Rz(-pi / 2) * chair_base_rot
         self.env.add(chair_bar4)
 
-        # Customers / Patrons
+        # Customers
         customer1 = part_mesh("personMaleCasual") 
         customer1.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
         self.env.add(customer1)
@@ -318,7 +318,7 @@ class AutomatedCafe:
         self.beacon.T = SE3(-0.05, -1.65, 1.45)
         self.env.add(self.beacon)
 
-        # Wall Shelf with Mounted Fire Extinguisher
+        # Wall Shelf + Fire Extinguisher
         self.wall_shelf = Box(scale=[0.22, 0.30, 0.025], color=[0.35, 0.25, 0.18, 1.0])
         self.wall_shelf.T = SE3(-1.70, -1.0, 1.25)
         self.env.add(self.wall_shelf)

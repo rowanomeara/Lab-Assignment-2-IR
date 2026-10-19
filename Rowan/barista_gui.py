@@ -12,6 +12,8 @@ class BaristaGUI:
         self.root = tk.Tk()
         self.root.title("IRB 120 Teach Pendant")
         self.root.geometry("360x430")
+        self.root.lift()
+        self.root.focus_force()
 
         # Top status banner showing current state
         self.status = tk.Label(self.root, text="READY", bg="#2e7d32", fg="white", font=("Arial", 11, "bold"))
@@ -48,8 +50,8 @@ class BaristaGUI:
         self._poll()
 
     def jog_joint(self, j, direction):
-        # Don't move if e-stopped or running auto sequence
-        if self.cafe.estop_active or getattr(self.cafe, "is_running", False):
+        # Don't move if e-stopped, curtain breached, or running auto sequence
+        if self.cafe.estop_active or self.cafe.sensor_breached or getattr(self.cafe, "is_running", False):
             return
         q = self.cafe.barista.q.copy()
         q[j] += np.deg2rad(5 * direction)
@@ -59,8 +61,8 @@ class BaristaGUI:
         self.cafe.env.step(0.02)
 
     def jog_cart(self, axis_idx, direction):
-        # Don't move if e-stopped or running auto sequence
-        if self.cafe.estop_active or getattr(self.cafe, "is_running", False):
+        # Don't move if e-stopped, curtain breached, or running auto sequence
+        if self.cafe.estop_active or self.cafe.sensor_breached or getattr(self.cafe, "is_running", False):
             return
         delta = [0, 0, 0]
         delta[axis_idx] = 0.01 * direction
@@ -74,47 +76,51 @@ class BaristaGUI:
     def estop(self):
         # Freeze the robot right away
         self.cafe.estop_active = True
-        self.cafe.update_safety_visuals()
-        self.status.config(text="E-STOPPED", bg="#d32f2f")
+        self._update_status()
 
     def reset(self):
         # Only allow reset if the light curtain is clear
         if self.cafe.sensor_breached:
             return
         self.cafe.estop_active = False
-        self.cafe.update_safety_visuals()
-        running = getattr(self.cafe, "is_running", False)
-        self.status.config(text="RUNNING" if running else "READY", bg="#1976d2" if running else "#2e7d32")
+        if not getattr(self.cafe, "is_running", False):
+            self.cafe.reset_simulation()
+        self._update_status()
 
     def curtain(self):
         # Toggle simulated safety light curtain breach
         self.cafe.sensor_breached = not self.cafe.sensor_breached
-        self.cafe.update_safety_visuals()
-        self.status.config(
-            text="CURTAIN BREACHED" if self.cafe.sensor_breached else "READY",
-            bg="#f57c00" if self.cafe.sensor_breached else "#2e7d32"
-        )
+        self._update_status()
 
     def run_seq(self):
         # Run the full coffee routine on a background thread so GUI doesn't freeze
-        if getattr(self.cafe, "is_running", False):
+        if getattr(self.cafe, "is_running", False) or self.cafe.estop_active or self.cafe.sensor_breached:
             return
         self.cafe.is_running = True
-        self.status.config(text="RUNNING", bg="#1976d2")
+        self._update_status()
 
         def thread_task():
             try:
                 self.cafe.run_sequence()
             finally:
                 self.cafe.is_running = False
-                if not self.cafe.estop_active:
-                    self.status.config(text="READY", bg="#2e7d32")
 
         threading.Thread(target=thread_task, daemon=True).start()
 
+    def _update_status(self):
+        if self.cafe.estop_active:
+            self.status.config(text="E-STOPPED", bg="#d32f2f")
+        elif self.cafe.sensor_breached:
+            self.status.config(text="CURTAIN BREACHED", bg="#f57c00")
+        elif getattr(self.cafe, "is_running", False):
+            self.status.config(text="RUNNING", bg="#1976d2")
+        else:
+            self.status.config(text="READY", bg="#2e7d32")
+
     def _poll(self):
-        # Update telemetry labels every 100ms
+        # Update telemetry labels and status banner every 100ms
         try:
+            self._update_status()
             q_deg = np.round(np.rad2deg(self.cafe.barista.q), 1)
             pos = np.round(self.cafe.barista.fkine(self.cafe.barista.q).t, 3)
             self.telem.config(text=f"q: {list(q_deg)}\nPos: X:{pos[0]:+.3f} Y:{pos[1]:+.3f} Z:{pos[2]:+.3f}")
