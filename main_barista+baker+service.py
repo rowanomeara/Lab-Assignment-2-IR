@@ -474,82 +474,151 @@ class AutomatedCafe:
             self.env.step(0.05)
 
     def staubli_serve_order(self):
-        R_down = SE3.Ry(pi)
-        R_place = SE3.Rz(pi/2) * R_down
-        p_grab = SE3(self.tray.T).t + [0.20, 0.0, 0.036]
-        p_place = np.array([0.59, -0.51, 1.022])
-        p_bell = SE3(self.bell.T).t + [0.0, 0.0, 0.058]
-        offsets = {}
+        T_hover_tray = SE3(self.tray.T) * SE3(0.20, 0.0, 0.25) * SE3.Ry(pi)
+        T_grasp_tray = SE3(self.tray.T) * SE3(0.20, 0.0, 0.036) * SE3.Ry(pi)
+        T_lift_tray  = SE3(self.tray.T) * SE3(0.20, 0.0, 0.31) * SE3.Ry(pi)
 
-        def move(q_target, steps, carry=False):
-            for q in jtraj(self.staubli.q, q_target, steps).q:
-                self.staubli.q = q
-                if carry:
-                    T_t = self.staubli.fkine(q) * offsets["tray"]
-                    self.tray.T = T_t
-                    for item in ("plate", "roll", "cup", "coffee", "milk"):
-                        getattr(self, item).T = T_t * offsets[item]
-                self.env.step(0.05)
+        ik_hover_tray = self.staubli.ikine_LM(T_hover_tray, q0=[2.5, 0.4, 1.0, 0.0, 1.5, 2.5])
+        ik_grasp_tray = self.staubli.ikine_LM(T_grasp_tray, q0=ik_hover_tray.q)
+        ik_lift_tray  = self.staubli.ikine_LM(T_lift_tray,  q0=ik_grasp_tray.q)
 
-        q_gh = self.staubli.ikine_LM(SE3(p_grab[0], p_grab[1], 1.22) * R_down, q0=[2.5, 0.4, 1.0, 0.0, 1.5, 2.5]).q
-        q_g  = self.staubli.ikine_LM(SE3(p_grab[0], p_grab[1], p_grab[2]) * R_down, q0=q_gh).q
-        q_gl = self.staubli.ikine_LM(SE3(p_grab[0], p_grab[1], 1.28) * R_down, q0=q_g).q
-        move(q_gh, 25)
-        move(q_g, 15)
+        traj_hover_tray = jtraj(self.staubli.q,     ik_hover_tray.q, 25)
+        traj_grasp_tray = jtraj(ik_hover_tray.q,    ik_grasp_tray.q, 15)
+        traj_lift_tray  = jtraj(ik_grasp_tray.q,    ik_lift_tray.q,  15)
 
-        T_tray_inv = SE3(self.tray.T).inv()
-        offsets["tray"] = self.staubli.fkine(self.staubli.q).inv() * SE3(self.tray.T)
-        for item in ("plate", "roll", "cup", "coffee", "milk"):
-            offsets[item] = T_tray_inv * SE3(getattr(self, item).T)
+        for q_step in traj_hover_tray.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
 
-        move(q_gl, 15, carry=True)
+        for q_step in traj_grasp_tray.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
 
-        q_swing = q_gl.copy()
-        q_swing[0] = 0.10
-        move(q_swing, 25, carry=True)
+        print("Serving tray grasped by Staubli!")
+        self.tray_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.tray.T)
+        self.plate_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.plate.T)
+        self.roll_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.roll.T)
+        self.cup_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.cup.T)
 
-        q_ph = self.staubli.ikine_LM(SE3(p_place[0], p_place[1], 1.25) * R_place, q0=q_swing).q
-        q_p  = self.staubli.ikine_LM(SE3(p_place[0], p_place[1], p_place[2]) * R_place, q0=q_ph).q
-        move(q_ph, 15, carry=True)
-        move(q_p, 15, carry=True)
-        move(q_ph, 15)
+        for q_step in traj_lift_tray.q:
+            self.staubli.q = q_step
+            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
+            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
 
-        q_bell_up = self.staubli.ikine_LM(SE3(p_bell[0], p_bell[1], p_bell[2] + 0.09) * R_down, q0=[-1.0, 1.4, 0.8, 0.0, 0.9, -1.0]).q
-        q_bell_tap = self.staubli.ikine_LM(SE3(p_bell[0], p_bell[1], p_bell[2] + 0.002) * R_down, q0=q_bell_up).q
+        q_swing = np.array([0.10, ik_lift_tray.q[1], ik_lift_tray.q[2], ik_lift_tray.q[3], ik_lift_tray.q[4], ik_lift_tray.q[5]])
+        traj_swing = jtraj(self.staubli.q, q_swing, 25)
 
-        move(q_bell_up, 20)
-        for _ in range(2):
-            move(q_bell_tap, 5)
-            move(q_bell_up, 5)
+        for q_step in traj_swing.q:
+            self.staubli.q = q_step
+            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
+            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        T_hover_place = SE3(0.59, -0.51, 1.25) * SE3.Rz(pi/2) * SE3.Ry(pi)
+        T_place_tray  = SE3(0.59, -0.51, 1.022) * SE3.Rz(pi/2) * SE3.Ry(pi)
+
+        ik_hover_place   = self.staubli.ikine_LM(T_hover_place, q0=self.staubli.q)
+        ik_place_tray    = self.staubli.ikine_LM(T_place_tray,  q0=ik_hover_place.q)
+        ik_retract_place = self.staubli.ikine_LM(T_hover_place, q0=ik_place_tray.q)
+
+        traj_hover_place   = jtraj(self.staubli.q,     ik_hover_place.q,   15)
+        traj_place_tray    = jtraj(ik_hover_place.q,   ik_place_tray.q,    15)
+        traj_retract_place = jtraj(ik_place_tray.q,    ik_retract_place.q, 15)
+
+        for q_step in traj_hover_place.q:
+            self.staubli.q = q_step
+            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
+            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        for q_step in traj_place_tray.q:
+            self.staubli.q = q_step
+            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
+            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        print("Order placed on counter by Staubli :)")
+
+        for q_step in traj_retract_place.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        T_hover_bell = SE3(self.bell.T) * SE3(0.0, 0.0, 0.148) * SE3.Ry(pi)
+        T_tap_bell   = SE3(self.bell.T) * SE3(0.0, 0.0, 0.06) * SE3.Ry(pi)
+
+        ik_hover_bell = self.staubli.ikine_LM(T_hover_bell, q0=[-1.0, 1.4, 0.8, 0.0, 0.9, -1.0])
+        ik_tap_bell   = self.staubli.ikine_LM(T_tap_bell,   q0=ik_hover_bell.q)
+
+        traj_to_bell  = jtraj(self.staubli.q,    ik_hover_bell.q, 20)
+        traj_tap_down = jtraj(ik_hover_bell.q,   ik_tap_bell.q,   5)
+        traj_tap_up   = jtraj(ik_tap_bell.q,     ik_hover_bell.q, 5)
+
+        for q_step in traj_to_bell.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        for q_step in traj_tap_down.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        for q_step in traj_tap_up.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        for q_step in traj_tap_down.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        for q_step in traj_tap_up.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        print("Service bell rung! Order ready :)")
 
     def run(self):
         """
         Main execution loop for the cafe's logic and trajectories.
         """
         print("Cafe Simulation Running... Close browser to exit.")
-        try:
-            self.barista_pick_up_cup()
-            
-            self.barista_place_cup()
-            
-            self.barista_get_coffee()
+        
+        self.barista_pick_up_cup()
+        
+        self.barista_place_cup()
+        
+        self.barista_get_coffee()
 
-            self.barista_present_cup_to_dobot()
+        self.barista_present_cup_to_dobot()
 
-            self.dobot_pour_milk()
-            
-            self.barista_serve_coffee()
+        self.dobot_pour_milk()
+        
+        self.barista_serve_coffee()
 
-            self.baker_pick_and_place_roll()
+        self.baker_pick_and_place_roll()
 
-            self.staubli_serve_order()
-            
-            while True:
-                self.env.step(0.05)
-        except KeyboardInterrupt:
-            pass
+        self.staubli_serve_order()
+        
+        while True:
+            self.env.step(0.05)
 
 if __name__ == "__main__":
 
     cafe = AutomatedCafe()
     cafe.run()
+

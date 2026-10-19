@@ -289,81 +289,131 @@ class AutomatedCafe:
     def staubli_serve_tray(self):
         from roboticstoolbox import jtraj
 
-        R_down = SE3.Ry(pi)
         p_cup = SE3(self.cup.T).t
         p_tray = SE3(self.tray.T).t
-        cup_off, tray_off, cup_tray_off = None, None, None
 
-        def move(q_target, steps, carry=None):
-            for q in jtraj(self.staubli.q, q_target, steps).q:
-                self.staubli.q = q
-                ee = self.staubli.fkine(q)
-                if carry == "cup":
-                    self.cup.T = ee * cup_off
-                    self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-                    self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
-                elif carry == "tray":
-                    self.tray.T = ee * tray_off
-                    self.cup.T = SE3(self.tray.T) * cup_tray_off
-                    self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-                    self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
-                self.env.step(0.05)
+        T_hover_cup = SE3(p_cup[0], p_cup[1], p_cup[2] + 0.22) * SE3.Ry(pi)
+        T_grasp_cup = SE3(p_cup[0], p_cup[1], p_cup[2] + 0.11) * SE3.Ry(pi)
 
-        q_hover = self.staubli.ikine_LM(SE3(p_cup[0], p_cup[1], p_cup[2] + 0.22) * R_down, q0=[0.3, 0.4, 0.6, 0, 0.5, 0]).q
-        q_grasp = self.staubli.ikine_LM(SE3(p_cup[0], p_cup[1], p_cup[2] + 0.11) * R_down, q0=q_hover).q
-        move(q_hover, 25)
-        move(q_grasp, 15)
+        ik_hover_cup = self.staubli.ikine_LM(T_hover_cup, q0=[0.3, 0.4, 0.6, 0, 0.5, 0])
+        ik_grasp_cup = self.staubli.ikine_LM(T_grasp_cup, q0=ik_hover_cup.q)
 
-        cup_off = self.staubli.fkine(self.staubli.q).inv() * SE3(self.cup.T)
-        move(q_hover, 15, "cup")
+        traj_hover_cup = jtraj(self.staubli.q, ik_hover_cup.q, 25)
+        traj_grasp_cup = jtraj(ik_hover_cup.q, ik_grasp_cup.q, 15)
+        traj_lift_cup  = jtraj(ik_grasp_cup.q, ik_hover_cup.q, 15)
+
+        for q_step in traj_hover_cup.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        for q_step in traj_grasp_cup.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        self.cup_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.cup.T)
+
+        for q_step in traj_lift_cup.q:
+            self.staubli.q = q_step
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
 
         p_place = p_tray + [0.04, 0.0, 0.03]
-        q_place_hover = self.staubli.ikine_LM(SE3(p_place[0], p_place[1], p_place[2] + 0.25) * R_down, q0=self.staubli.q).q
-        q_place = self.staubli.ikine_LM(SE3(p_place[0], p_place[1], p_place[2] + 0.11) * R_down, q0=q_place_hover).q
-        move(q_place_hover, 20, "cup")
-        move(q_place, 15, "cup")
-        move(q_place_hover, 15)
+        T_place_hover = SE3(p_place[0], p_place[1], p_place[2] + 0.25) * SE3.Ry(pi)
+        T_place_cup   = SE3(p_place[0], p_place[1], p_place[2] + 0.11) * SE3.Ry(pi)
+
+        ik_place_hover = self.staubli.ikine_LM(T_place_hover, q0=self.staubli.q)
+        ik_place_cup   = self.staubli.ikine_LM(T_place_cup,   q0=ik_place_hover.q)
+
+        traj_place_hover   = jtraj(self.staubli.q,     ik_place_hover.q, 20)
+        traj_place_cup     = jtraj(ik_place_hover.q,   ik_place_cup.q,   15)
+        traj_place_retract = jtraj(ik_place_cup.q,     ik_place_hover.q, 15)
+
+        for q_step in traj_place_hover.q:
+            self.staubli.q = q_step
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        for q_step in traj_place_cup.q:
+            self.staubli.q = q_step
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        for q_step in traj_place_retract.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
 
         p_handle = p_tray + [-0.14, 0.0, 0.04]
-        q_tray_hover = self.staubli.ikine_LM(SE3(p_handle[0], p_handle[1], p_handle[2] + 0.18) * R_down, q0=self.staubli.q).q
-        q_tray_grasp = self.staubli.ikine_LM(SE3(p_handle[0], p_handle[1], p_handle[2]) * R_down, q0=q_tray_hover).q
-        q_tray_lift = self.staubli.ikine_LM(SE3(p_handle[0], p_handle[1], p_handle[2] + 0.28) * R_down, q0=q_tray_grasp).q
-        move(q_tray_hover, 15)
-        move(q_tray_grasp, 15)
+        T_tray_hover = SE3(p_handle[0], p_handle[1], p_handle[2] + 0.18) * SE3.Ry(pi)
+        T_tray_grasp = SE3(p_handle[0], p_handle[1], p_handle[2]) * SE3.Ry(pi)
+        T_tray_lift  = SE3(p_handle[0], p_handle[1], p_handle[2] + 0.28) * SE3.Ry(pi)
 
-        tray_off = self.staubli.fkine(self.staubli.q).inv() * SE3(self.tray.T)
-        cup_tray_off = SE3(self.tray.T).inv() * SE3(self.cup.T)
-        move(q_tray_lift, 20, "tray")
+        ik_tray_hover = self.staubli.ikine_LM(T_tray_hover, q0=self.staubli.q)
+        ik_tray_grasp = self.staubli.ikine_LM(T_tray_grasp, q0=ik_tray_hover.q)
+        ik_tray_lift  = self.staubli.ikine_LM(T_tray_lift,  q0=ik_tray_grasp.q)
 
-        q_rot = self.staubli.q.copy()
-        q_rot[0] += pi
-        move(q_rot, 40, "tray")
+        traj_tray_hover = jtraj(self.staubli.q,   ik_tray_hover.q, 15)
+        traj_tray_grasp = jtraj(ik_tray_hover.q,  ik_tray_grasp.q, 15)
+        traj_tray_lift  = jtraj(ik_tray_grasp.q,  ik_tray_lift.q,  20)
+
+        for q_step in traj_tray_hover.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        for q_step in traj_tray_grasp.q:
+            self.staubli.q = q_step
+            self.env.step(0.05)
+
+        self.tray_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.tray.T)
+        self.cup_offset  = self.staubli.fkine(self.staubli.q).inv() * SE3(self.cup.T)
+
+        for q_step in traj_tray_lift.q:
+            self.staubli.q = q_step
+            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
+
+        q_rot = self.staubli.q + [pi, 0, 0, 0, 0, 0]
+        traj_rot = jtraj(self.staubli.q, q_rot, 40)
+
+        for q_step in traj_rot.q:
+            self.staubli.q = q_step
+            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+            self.env.step(0.05)
 
     def run(self):
         """
         Main execution loop for the cafe's logic and trajectories.
         """
-        try:
-            self.barista_pick_up_cup()
-            
-            self.barista_place_cup()
-            
-            self.barista_get_coffee()
+        self.barista_pick_up_cup()
+        
+        self.barista_place_cup()
+        
+        self.barista_get_coffee()
 
-            self.barista_present_cup_to_dobot()
+        self.barista_present_cup_to_dobot()
 
-            self.dobot_pour_milk()
-            
-            self.barista_serve_coffee()
+        self.dobot_pour_milk()
+        
+        self.barista_serve_coffee()
 
-            self.staubli_serve_tray()
-            
-            while True:
-                self.env.step(0.05)
-        except KeyboardInterrupt:
-            pass
+        self.staubli_serve_tray()
+        
+        while True:
+            self.env.step(0.05)
 
 if __name__ == "__main__":
 
     cafe = AutomatedCafe()
     cafe.run()
+

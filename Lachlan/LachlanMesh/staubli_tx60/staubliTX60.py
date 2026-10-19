@@ -19,7 +19,7 @@ class StaubliTX60(DHRobot):
 
         super().__init__(links, name="Staubli TX60")
 
-        mesh_dir = os.path.dirname(os.path.abspath(__file__))
+        mesh_dir = os.path.dirname(__file__)
 
         offsets = [
             np.array([
@@ -75,10 +75,11 @@ class StaubliTX60(DHRobot):
         self.base_link_mesh = load_geom("base_link.stl", np.eye(4), color=staubli_yellow)
 
         for i in range(6):
-            c = staubli_gray if i == 5 else staubli_yellow
-            m = load_geom(f"link_{i+1}.stl", offsets[i], color=c)
+            m = load_geom(f"link_{i+1}.stl", offsets[i])
+            if i == 5 and m is not None:
+                m.color = staubli_gray
             self.links[i].geometry = [m] if m else []
-            self.links[i].collision = [load_geom(f"link_{i+1}.stl", offsets[i], color=c)] if m else []
+            self.links[i].collision = [load_geom(f"link_{i+1}.stl", offsets[i])] if m else []
 
     def _update_link_tf(self, q=None):
         super(DHRobot, self)._update_link_tf(q)
@@ -86,6 +87,7 @@ class StaubliTX60(DHRobot):
 
 if __name__ == "__main__":
     robot = StaubliTX60()
+    print("DH Model Built")
 
     import swift
     env = swift.Swift()
@@ -101,14 +103,11 @@ if __name__ == "__main__":
     q_start = np.zeros(6)
     q_end = np.array([pi/4, -pi/6, pi/3, pi/4, pi/3, pi/6])
 
-    traj = jtraj(q_start, q_end, 60)
+    traj = jtraj(q_start, q_end, 100)
 
-    try:
-        for q_step in traj.q:
-            robot.q = q_step
-            env.step(0.04)
+    for q_step in traj.q:
+        robot.q = q_step
+        env.step(0.05)
 
-        while True:
-            env.step(0.05)
-    except KeyboardInterrupt:
-        pass
+    while True:
+        env.step(0.05)
