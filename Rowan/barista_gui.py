@@ -74,6 +74,7 @@ class BaristaGUI:
     def estop(self):
         # Freeze the robot right away
         self.cafe.estop_active = True
+        self.cafe.update_safety_visuals()
         self.status.config(text="E-STOPPED", bg="#d32f2f")
 
     def reset(self):
@@ -81,12 +82,14 @@ class BaristaGUI:
         if self.cafe.sensor_breached:
             return
         self.cafe.estop_active = False
+        self.cafe.update_safety_visuals()
         running = getattr(self.cafe, "is_running", False)
         self.status.config(text="RUNNING" if running else "READY", bg="#1976d2" if running else "#2e7d32")
 
     def curtain(self):
         # Toggle simulated safety light curtain breach
         self.cafe.sensor_breached = not self.cafe.sensor_breached
+        self.cafe.update_safety_visuals()
         self.status.config(
             text="CURTAIN BREACHED" if self.cafe.sensor_breached else "READY",
             bg="#f57c00" if self.cafe.sensor_breached else "#2e7d32"
