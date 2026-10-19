@@ -8,6 +8,9 @@ from ir_support.robots import DobotMagician
 from ir_support_extra_parts.parts import part_mesh 
 import os
 import sys
+import time
+sys.modules['numpy.char'] = np.char
+from machinevisiontoolbox import CentralCamera
 
 # Ensure repository root is on sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +38,19 @@ class AutomatedCafe:
         """
         self.env = swift.Swift()
         self.env.launch(realtime=True)
+
+        self.estop_active = False
+        self.sensor_breached = False
+        self.is_running = False
+        self.tray_attached = False
+
+        # Guard env.step globally against E-stop and safety sensor pauses
+        orig_step = self.env.step
+        def guarded_step(dt=0.05):
+            while self.estop_active or self.sensor_breached:
+                time.sleep(0.05)
+            orig_step(dt)
+        self.env.step = guarded_step
         
         self.barista = ABB_IRB120()
         
@@ -89,8 +105,8 @@ class AutomatedCafe:
         self.env.add(self.counter)
         
         # Plank Tabletop
-        tabletop = Box(scale=[1.8, 2.2, 0.05], color=[0.35, 0.25, 0.15, 1.0])
-        tabletop.T = SE3(-0.6, -0.2, 0.95)
+        tabletop = Box(scale=[1.8, 2.2, 0.97], color=[0.35, 0.25, 0.15, 1.0])
+        tabletop.T = SE3(-0.6, -0.2, 0.49)
         self.env.add(tabletop)
 
         #Coffee Machine
@@ -171,39 +187,167 @@ class AutomatedCafe:
         self.croissant = self.roll
         self.roll_attached = False
         
-        #\\\Environment///
-
-        floor = Box(scale=[6.0, 7.0, 0.02], color=[0.25, 0.18, 0.12, 1.0])
-        floor.T = SE3(0.0, -0.5, 0.001)
+        # Environment Props - Cafe Floor & Walls
+        floor = Box(scale=[8.5, 9.0, 0.02], color=[0.34, 0.24, 0.16, 1.0])
+        floor.T = SE3(0.75, -0.5, 0.001)
         self.env.add(floor)
         
-        back_wall = Box(scale=[0.05, 5.0, 2.6], color=[0.85, 0.82, 0.78, 1.0])
+        back_wall = Box(scale=[0.05, 9.0, 2.6], color=[0.88, 0.86, 0.82, 1.0])
         back_wall.T = SE3(-1.8, -0.5, 1.3)
         self.env.add(back_wall)
         
         menu_board = Box(scale=[0.02, 1.4, 0.8], color=[0.12, 0.12, 0.12, 1.0])
         menu_board.T = SE3(-1.75, 0.2, 1.9)
         self.env.add(menu_board)
-        
-        table = part_mesh("StandingBarTable")
-        table.T = SE3(2.1, 2.5, 0.0)
-        self.env.add(table)
 
-        chair = part_mesh("chair")
-        chair.T = SE3(2.5, 2.5, 0.0) * SE3.Ry(-pi / 2)* SE3.Rz(-pi / 2)
-        self.env.add(chair)
-        
-        customer = part_mesh("personMaleCasual") 
-        customer.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
-        self.env.add(customer)
+        # Cafe Lounge Seating: Tufted Leather Sofa & Round Marble Coffee Table
+        sofa_path = os.path.join(base_path, "Workcell meshes", "Sofa", "sofa.stl")
+        sofa = Mesh(sofa_path, color=[0.36, 0.22, 0.14, 1.0])
+        sofa.T = SE3(3.4, -2.5, 0.0) * SE3.Rz(-pi / 2) * SE3.Rx(pi / 2)
+        self.env.add(sofa)
+
+        coffee_table_path = os.path.join(base_path, "Workcell meshes", "CoffeeTable", "coffee_table.stl")
+        coffee_table = Mesh(coffee_table_path, color=[0.94, 0.93, 0.90, 1.0], scale=[0.85, 0.85, 0.85])
+        coffee_table.T = SE3(2.4, -2.5, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(coffee_table)
+
+        chair_base_rot = SE3.Ry(-pi / 2) * SE3.Rz(-pi / 2)
+
+        lounge_chair1 = part_mesh("chair")
+        lounge_chair1.T = SE3(1.6, -2.1, 0.0) * SE3.Rz(-0.46 - pi) * chair_base_rot
+        self.env.add(lounge_chair1)
+
+        lounge_chair2 = part_mesh("chair")
+        lounge_chair2.T = SE3(1.6, -2.9, 0.0) * SE3.Rz(0.46 - pi) * chair_base_rot
+        self.env.add(lounge_chair2)
+
+        # Potted Plants
+        plant_path = os.path.join(base_path, "Workcell meshes", "Plant", "plant.stl")
+        plant_lounge = Mesh(plant_path, color=[0.22, 0.52, 0.26, 1.0], scale=[0.9, 0.9, 0.9])
+        plant_lounge.T = SE3(3.4, -1.3, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(plant_lounge)
+
+        plant_entry = Mesh(plant_path, color=[0.25, 0.50, 0.22, 1.0], scale=[0.8, 0.8, 0.8])
+        plant_entry.T = SE3(0.8, -2.8, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(plant_entry)
+
+        plant_dining = Mesh(plant_path, color=[0.20, 0.55, 0.28, 1.0], scale=[0.85, 0.85, 0.85])
+        plant_dining.T = SE3(1.1, 2.8, 0.0) * SE3.Rx(pi / 2)
+        self.env.add(plant_dining)
+
+        # High-Top Bistro & Dining Area
+        table1 = part_mesh("StandingBarTable")
+        table1.T = SE3(2.2, 2.5, 0.0)
+        self.env.add(table1)
+
+        chair_bar1 = part_mesh("chair")
+        chair_bar1.T = SE3(2.6, 2.5, 0.0) * chair_base_rot
+        self.env.add(chair_bar1)
+
+        chair_bar2 = part_mesh("chair")
+        chair_bar2.T = SE3(1.8, 2.5, 0.0) * SE3.Rz(pi) * chair_base_rot
+        self.env.add(chair_bar2)
+
+        table2 = part_mesh("StandingBarTable")
+        table2.T = SE3(3.3, 1.4, 0.0)
+        self.env.add(table2)
+
+        chair_bar3 = part_mesh("chair")
+        chair_bar3.T = SE3(3.7, 1.4, 0.0) * chair_base_rot
+        self.env.add(chair_bar3)
+
+        chair_bar4 = part_mesh("chair")
+        chair_bar4.T = SE3(3.3, 1.8, 0.0) * SE3.Rz(-pi / 2) * chair_base_rot
+        self.env.add(chair_bar4)
+
+        # Customers / Patrons
+        customer1 = part_mesh("personMaleCasual") 
+        customer1.T = SE3(1.5, 0.5, 0.0) * SE3.Rz(pi)
+        self.env.add(customer1)
+
+        customer2 = part_mesh("personFemaleBusiness")
+        customer2.T = SE3(2.2, 1.9, 0.0)
+        self.env.add(customer2)
+
+        customer3 = part_mesh("personMaleOld")
+        customer3.T = SE3(3.4, -0.6, 0.0) * SE3.Rz(-pi/2)
+        self.env.add(customer3)
         
         takeaway_cup = part_mesh("TakeawayCup")
         takeaway_cup.T = SE3(0.5, -0.1, 0.97)
         self.env.add(takeaway_cup)
         
         self.estop = part_mesh("emergencyStopWallMounted")
-        self.estop.T = SE3(-1.77, -0.6, 1.4)*SE3.Rz(-pi/2)
+        self.estop.T = SE3(-1.77, -0.6, 1.4) * SE3.Rz(-pi/2)
         self.env.add(self.estop)
+
+        # Safety Equipment 3D Models
+        curtain_barista_p1 = part_mesh("SafetyLightCurtain")
+        curtain_barista_p1.T = SE3(0.75, 0.05, 0.97)
+        self.env.add(curtain_barista_p1)
+
+        curtain_barista_p2 = part_mesh("SafetyLightCurtain")
+        curtain_barista_p2.T = SE3(0.75, 0.80, 0.97)
+        self.env.add(curtain_barista_p2)
+
+        beam_barista = Box(scale=[0.01, 0.75, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_barista.T = SE3(0.75, 0.425, 1.15)
+        self.env.add(beam_barista)
+
+        curtain_flank_p1 = part_mesh("SafetyLightCurtain")
+        curtain_flank_p1.T = SE3(0.74, 0.86, 0.97) * SE3.Rz(pi/2)
+        self.env.add(curtain_flank_p1)
+
+        curtain_flank_p2 = part_mesh("SafetyLightCurtain")
+        curtain_flank_p2.T = SE3(0.15, 0.86, 0.97) * SE3.Rz(-pi/2)
+        self.env.add(curtain_flank_p2)
+
+        beam_flank = Box(scale=[0.59, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(0.445, 0.86, 1.15)
+        self.env.add(beam_flank)
+
+        curtain_wing_p1 = part_mesh("SafetyLightCurtain")
+        curtain_wing_p1.T = SE3(0.18, -1.75, 0.97) * SE3.Rz(pi/2)
+        self.env.add(curtain_wing_p1)
+
+        curtain_wing_p2 = part_mesh("SafetyLightCurtain")
+        curtain_wing_p2.T = SE3(-0.80, -1.75, 0.97) * SE3.Rz(-pi/2)
+        self.env.add(curtain_wing_p2)
+
+        beam_wing = Box(scale=[0.98, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
+        beam_wing.T = SE3(-0.31, -1.75, 1.15)
+        self.env.add(beam_wing)
+
+        self.curtain_beams = [beam_barista, beam_flank, beam_wing]
+
+        light_tower = part_mesh("LightTower")
+        light_tower.T = SE3(-0.05, -1.65, 0.97)
+        self.env.add(light_tower)
+
+        self.beacon = Cylinder(radius=0.03, length=0.07, color=[0.0, 1.0, 0.0, 0.95])
+        self.beacon.T = SE3(-0.05, -1.65, 1.45)
+        self.env.add(self.beacon)
+
+        barrier = part_mesh("barrier1.5x0.2x1m")
+        barrier.T = SE3(-1.5, 0.5, 0.0) * SE3.Rz(pi/2)
+        self.env.add(barrier)
+
+        self.wall_shelf = Box(scale=[0.22, 0.30, 0.025], color=[0.35, 0.25, 0.18, 1.0])
+        self.wall_shelf.T = SE3(-1.70, -1.0, 1.25)
+        self.env.add(self.wall_shelf)
+
+        fire_ext = part_mesh("FireExtinguisher")
+        fire_ext.T = SE3(-1.68, -1.0, 1.27)
+        self.env.add(fire_ext)
+
+        warning_sign = part_mesh("WarningSign")
+        warning_sign.T = SE3(-1.5, 0.7, 0.0)
+        self.env.add(warning_sign)
+
+    def press_physical_estop(self):
+        """Simulates physical E-stop push button press."""
+        self.estop_active = True
+        print("[SAFETY] Physical Emergency Stop pressed - robot halted.")
         
         
         
@@ -473,44 +617,101 @@ class AutomatedCafe:
             self.baker.q = q
             self.env.step(0.05)
 
+    def staubli_rmrc(self, T_goal, steps=20, dt=0.05):
+        """
+        Executes a straight-line Cartesian path for Staubli using Closed-Loop RMRC with DLS.
+        """
+        p_goal = np.array(T_goal.t)
+
+        for k in range(steps):
+            T_curr = self.staubli.fkine(self.staubli.q)
+
+            # Closed-loop velocity: remaining distance / remaining time
+            rem_time = max((steps - k) * dt, dt)
+            v_lin = (p_goal - np.array(T_curr.t)) / rem_time
+            xdot = np.hstack((v_lin, np.zeros(3)))
+
+            # Jacobian & Damped Least Squares (DLS)
+            J = self.staubli.jacob0(self.staubli.q)
+            m = np.sqrt(np.linalg.det(J @ J.T))
+            damping = 0.001 if m < 0.01 else 0.0
+            dq = np.linalg.inv(J.T @ J + damping * np.eye(6)) @ J.T @ xdot
+
+            self.staubli.q = self.staubli.q + dq * dt
+
+            if self.tray_attached:
+                self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
+                self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
+                self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
+                self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
+                self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
+                self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
+
+            self.env.step(dt)
+
+    def staubli_visual_servo_to_tray(self, max_steps=25, dt=0.05):
+        """
+        IBVS: Translates Staubli gripper to center directly over the serving tray using world-frame Jacobian.
+        """
+        cam = CentralCamera(f=0.08, rho=10e-5, imagesize=[1024, 1024], pp=[512, 512])
+
+        p = SE3(self.tray.T).t
+        pts_world = p[:, None] + [[0.24, 0.24, 0.16, 0.16], [0.04, -0.04, 0.04, -0.04], [0.02, 0.02, 0.02, 0.02]]
+
+        T_desired = SE3(self.tray.T) * SE3(0.20, 0.0, 0.25) * SE3.Ry(pi)
+        p_star = cam.project_point(T_desired.inv() * pts_world)
+
+        depth = 0.23
+        for step in range(max_steps):
+            T_cam = self.staubli.fkine(self.staubli.q)
+            pts_cam = T_cam.inv() * pts_world
+            uv = cam.project_point(pts_cam)
+            e = (p_star - uv).flatten('F')
+
+            if np.linalg.norm(e) < 5.0:
+                print(f"Visual servoing converged in {step} steps!")
+                break
+
+            # 3-DOF camera translation
+            J_img = cam.visjac_p(uv, depth)[:, :3]
+            v_cam = 4.0 * np.linalg.pinv(J_img) @ e
+
+            # Rotate to world frame and solve joint velocities
+            v_world = np.hstack((T_cam.R @ v_cam, [0, 0, 0]))
+            dq = np.linalg.pinv(self.staubli.jacob0(self.staubli.q)) @ v_world
+
+            self.staubli.q = self.staubli.q + dq * dt
+            self.env.step(dt)
+
     def staubli_serve_order(self):
-        T_hover_tray = SE3(self.tray.T) * SE3(0.20, 0.0, 0.25) * SE3.Ry(pi)
+        T_hover_tray = SE3(self.tray.T) * SE3(0.16, -0.03, 0.25) * SE3.Ry(pi)
         T_grasp_tray = SE3(self.tray.T) * SE3(0.20, 0.0, 0.036) * SE3.Ry(pi)
         T_lift_tray  = SE3(self.tray.T) * SE3(0.20, 0.0, 0.31) * SE3.Ry(pi)
 
         ik_hover_tray = self.staubli.ikine_LM(T_hover_tray, q0=[2.5, 0.4, 1.0, 0.0, 1.5, 2.5])
-        ik_grasp_tray = self.staubli.ikine_LM(T_grasp_tray, q0=ik_hover_tray.q)
-        ik_lift_tray  = self.staubli.ikine_LM(T_lift_tray,  q0=ik_grasp_tray.q)
-
-        traj_hover_tray = jtraj(self.staubli.q,     ik_hover_tray.q, 25)
-        traj_grasp_tray = jtraj(ik_hover_tray.q,    ik_grasp_tray.q, 15)
-        traj_lift_tray  = jtraj(ik_grasp_tray.q,    ik_lift_tray.q,  15)
+        traj_hover_tray = jtraj(self.staubli.q, ik_hover_tray.q, 25)
 
         for q_step in traj_hover_tray.q:
             self.staubli.q = q_step
             self.env.step(0.05)
 
-        for q_step in traj_grasp_tray.q:
-            self.staubli.q = q_step
-            self.env.step(0.05)
+        # Align gripper directly over tray handle using IBVS
+        self.staubli_visual_servo_to_tray()
+
+        # Lower straight down to tray using RMRC
+        self.staubli_rmrc(T_grasp_tray, steps=20)
 
         print("Serving tray grasped by Staubli!")
+        self.tray_attached = True
         self.tray_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.tray.T)
         self.plate_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.plate.T)
         self.roll_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.roll.T)
         self.cup_offset = self.staubli.fkine(self.staubli.q).inv() * SE3(self.cup.T)
 
-        for q_step in traj_lift_tray.q:
-            self.staubli.q = q_step
-            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
-            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
-            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
-            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
-            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
-            self.env.step(0.05)
+        # Lift tray straight up using RMRC (keeps coffee and roll completely level)
+        self.staubli_rmrc(T_lift_tray, steps=20)
 
-        q_swing = np.array([0.10, ik_lift_tray.q[1], ik_lift_tray.q[2], ik_lift_tray.q[3], ik_lift_tray.q[4], ik_lift_tray.q[5]])
+        q_swing = np.array([0.10, self.staubli.q[1], self.staubli.q[2], self.staubli.q[3], self.staubli.q[4], self.staubli.q[5]])
         traj_swing = jtraj(self.staubli.q, q_swing, 25)
 
         for q_step in traj_swing.q:
@@ -526,13 +727,8 @@ class AutomatedCafe:
         T_hover_place = SE3(0.59, -0.51, 1.25) * SE3.Rz(pi/2) * SE3.Ry(pi)
         T_place_tray  = SE3(0.59, -0.51, 1.022) * SE3.Rz(pi/2) * SE3.Ry(pi)
 
-        ik_hover_place   = self.staubli.ikine_LM(T_hover_place, q0=self.staubli.q)
-        ik_place_tray    = self.staubli.ikine_LM(T_place_tray,  q0=ik_hover_place.q)
-        ik_retract_place = self.staubli.ikine_LM(T_hover_place, q0=ik_place_tray.q)
-
-        traj_hover_place   = jtraj(self.staubli.q,     ik_hover_place.q,   15)
-        traj_place_tray    = jtraj(ik_hover_place.q,   ik_place_tray.q,    15)
-        traj_retract_place = jtraj(ik_place_tray.q,    ik_retract_place.q, 15)
+        ik_hover_place = self.staubli.ikine_LM(T_hover_place, q0=self.staubli.q)
+        traj_hover_place = jtraj(self.staubli.q, ik_hover_place.q, 15)
 
         for q_step in traj_hover_place.q:
             self.staubli.q = q_step
@@ -544,21 +740,14 @@ class AutomatedCafe:
             self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
             self.env.step(0.05)
 
-        for q_step in traj_place_tray.q:
-            self.staubli.q = q_step
-            self.tray.T = self.staubli.fkine(self.staubli.q) * self.tray_offset
-            self.plate.T = self.staubli.fkine(self.staubli.q) * self.plate_offset
-            self.roll.T = self.staubli.fkine(self.staubli.q) * self.roll_offset
-            self.cup.T = self.staubli.fkine(self.staubli.q) * self.cup_offset
-            self.coffee.T = SE3(self.cup.T) * SE3(0, 0, 0.08)
-            self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
-            self.env.step(0.05)
+        # Lower tray straight down onto counter using RMRC
+        self.staubli_rmrc(T_place_tray, steps=20)
 
         print("Order placed on counter by Staubli :)")
+        self.tray_attached = False
 
-        for q_step in traj_retract_place.q:
-            self.staubli.q = q_step
-            self.env.step(0.05)
+        # Retract straight up from counter using RMRC
+        self.staubli_rmrc(T_hover_place, steps=20)
 
         T_hover_bell = SE3(self.bell.T) * SE3(0.0, 0.0, 0.148) * SE3.Ry(pi)
         T_tap_bell   = SE3(self.bell.T) * SE3(0.0, 0.0, 0.06) * SE3.Ry(pi)
