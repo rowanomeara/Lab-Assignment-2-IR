@@ -290,8 +290,8 @@ class AutomatedCafe:
         curtain_barista_p2.T = SE3(0.75, 0.80, 0.97)
         self.env.add(curtain_barista_p2)
 
-        beam_barista = Box(scale=[0.01, 0.75, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_barista.T = SE3(0.75, 0.425, 1.15)
+        beam_barista = Box(scale=[0.01, 0.75, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_barista.T = SE3(0.75, 0.425, 1.36)
         self.env.add(beam_barista)
 
         curtain_flank_p1 = part_mesh("SafetyLightCurtain")
@@ -302,8 +302,8 @@ class AutomatedCafe:
         curtain_flank_p2.T = SE3(0.15, 0.86, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_flank_p2)
 
-        beam_flank = Box(scale=[0.59, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_flank.T = SE3(0.445, 0.86, 1.15)
+        beam_flank = Box(scale=[0.59, 0.01, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(0.445, 0.86, 1.36)
         self.env.add(beam_flank)
 
         curtain_wing_p1 = part_mesh("SafetyLightCurtain")
@@ -314,8 +314,8 @@ class AutomatedCafe:
         curtain_wing_p2.T = SE3(-0.80, -1.75, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_wing_p2)
 
-        beam_wing = Box(scale=[0.98, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_wing.T = SE3(-0.31, -1.75, 1.15)
+        beam_wing = Box(scale=[0.98, 0.01, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_wing.T = SE3(-0.31, -1.75, 1.36)
         self.env.add(beam_wing)
 
         self.curtain_beams = [beam_barista, beam_flank, beam_wing]

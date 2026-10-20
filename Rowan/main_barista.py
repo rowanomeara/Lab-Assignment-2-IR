@@ -304,8 +304,8 @@ class AutomatedCafe:
         curtain_barista_p2.T = SE3(0.75, 0.80, 0.97)
         self.env.add(curtain_barista_p2)
 
-        beam_barista = Box(scale=[0.01, 0.75, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_barista.T = SE3(0.75, 0.425, 1.15)
+        beam_barista = Box(scale=[0.01, 0.75, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_barista.T = SE3(0.75, 0.425, 1.36)
         self.env.add(beam_barista)
 
         # Barista Light Curtain (covering full outer flank side of counter and bench)
@@ -317,8 +317,8 @@ class AutomatedCafe:
         curtain_flank_p2.T = SE3(-1.45, 0.86, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_flank_p2)
 
-        beam_flank = Box(scale=[2.19, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_flank.T = SE3(-0.355, 0.86, 1.15)
+        beam_flank = Box(scale=[2.19, 0.01, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(-0.355, 0.86, 1.36)
         self.env.add(beam_flank)
 
         # Side Wing Light Curtain (covering full side counter wing to the end of the bench)
@@ -330,8 +330,8 @@ class AutomatedCafe:
         curtain_wing_p2.T = SE3(-1.45, -1.75, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_wing_p2)
 
-        beam_wing = Box(scale=[1.63, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_wing.T = SE3(-0.635, -1.75, 1.15)
+        beam_wing = Box(scale=[1.63, 0.01, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_wing.T = SE3(-0.635, -1.75, 1.36)
         self.env.add(beam_wing)
 
         # Keep beams together safety updates
@@ -362,7 +362,7 @@ class AutomatedCafe:
         
         # Cleaning spray bottle (deliberate obstacle 
         self.bottle = Cylinder(radius=0.045, length=0.15, color=[0.9, 0.2, 0.2, 0.85])
-        self.bottle.T = SE3(-0.50, -0.20, 0.97 + 0.075)
+        self.bottle.T = SE3(-0.15, -0.05, 0.97 + 0.1)
         self.env.add(self.bottle)
 
         # Visual bounding box
@@ -489,8 +489,46 @@ class AutomatedCafe:
         ee_target = handover_cup_pose * self.cup_offset.inv()
         ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q)
         
-        traj_present = jtraj(self.barista.q, ik_present.q, 50)
-        for q_step in traj_present.q:
+        # Collision Avoidance
+        # Snap the visual bounding box to wherever the bottle currently sits
+        if hasattr(self, 'bottle_bbox'):
+            self.bottle_bbox.T = self.bottle.T
+
+        # Get bottle location and build a safety box around it (radius + height + cup buffer)
+        p_obs = SE3(self.bottle.T).t                            # Obstacle center [x, y, z] in world frame
+        r_obs = getattr(self.bottle, 'radius', 0.045) + 0.06    # Obstacle radius + cup clearance
+        h_obs = getattr(self.bottle, 'length', 0.15) / 2 + 0.06  # Half-height + cup clearance
+
+        # Helper to test if a 3D point lands inside the obstacle box
+        in_box = lambda p: (p_obs[0] - r_obs <= p[0] <= p_obs[0] + r_obs) and \
+                           (p_obs[1] - r_obs <= p[1] <= p_obs[1] + r_obs) and \
+                           (p_obs[2] - h_obs <= p[2] <= p_obs[2] + h_obs)
+
+        # Plan the default direct trajectory over to Dobot handover
+        traj_nominal = jtraj(self.barista.q, ik_present.q, 50)
+
+        # Check every step along the path to see if the cup would hit the obstacle
+        collision = any(in_box((self.barista.fkine(q) * self.cup_offset).t) for q in traj_nominal.q)
+
+        if collision:
+            print(f"Collision detected with obstacle at {np.round(p_obs[:2], 2)}! Replanning detour...")
+
+            # Calculate a safe height to clear the top of the bottle
+            z_detour = p_obs[2] + getattr(self.bottle, 'length', 0.15) / 2 + 0.22
+
+            # Solve IK for an overhead waypoint straight above the bottle
+            ee_detour = SE3(p_obs[0], p_obs[1], z_detour) * SE3.Rz(pi/2) * self.cup_offset.inv()
+            q_detour = self.barista.ikine_LM(ee_detour, q0=self.barista.q).q
+
+            # Join two trajectories together: start -> up over bottle -> handover
+            traj_to_detour = jtraj(self.barista.q, q_detour, 25).q
+            traj_to_handover = jtraj(q_detour, ik_present.q, 25).q
+            traj_present_q = np.vstack((traj_to_detour, traj_to_handover))
+        else:
+            print("Path clear. Proceeding along nominal trajectory...")
+            traj_present_q = traj_nominal.q
+
+        for q_step in traj_present_q:
             self.barista.q = q_step
             if self.cup_attached:
                 self.cup.T = self.barista.fkine(self.barista.q) * self.cup_offset
@@ -546,8 +584,8 @@ class AutomatedCafe:
 
         # Extract obstacle position and compute bounding box with safety margins
         p_obs = SE3(self.bottle.T).t                            # Obstacle center [x, y, z] in world frame
-        r_obs = getattr(self.bottle, 'radius', 0.045) + 0.02    # Obstacle radius + 20mm safety clearance
-        h_obs = getattr(self.bottle, 'length', 0.15) / 2 + 0.02  # Half-height + 20mm safety clearance
+        r_obs = getattr(self.bottle, 'radius', 0.045) + 0.06    # Obstacle radius + safety clearance
+        h_obs = getattr(self.bottle, 'length', 0.15) / 2 + 0.06  # Half-height + safety clearance
 
         # Check if a 3D Cartesian point lies inside the bounding box volume
         in_box = lambda p: (p_obs[0] - r_obs <= p[0] <= p_obs[0] + r_obs) and \
@@ -623,9 +661,9 @@ class AutomatedCafe:
             xdot = np.hstack((v_lin, np.zeros(3))) # 6D Cartesian velocity: move linearly, but ZERO angular rotation (keep cup level)
 
             # Jacobian & DLS
-            J = self.barista.jacob0(self.barista.q) # 1. Get the 6x6 Jacobian at current arm position
-            m = np.sqrt(np.linalg.det(J @ J.T)) # 2. Check manipulability (distance to singularity)
-            damping = 0.001 if m < 0.01 else 0.0 # 3. Apply Damped Least Squares if manipulability drops below threshold
+            J = self.barista.jacob0(self.barista.q) # Get the 6x6 Jacobian at current arm position
+            m = np.sqrt(np.linalg.det(J @ J.T)) # Check manipulability (distance to singularity)
+            damping = 0.001 if m < 0.01 else 0.0 # Apply Damped Least Squares if manipulability drops below threshold
             dq = np.linalg.inv(J.T @ J + damping * np.eye(6)) @ J.T @ xdot # 4. Solve for joint speeds
 
             self.barista.q += dq * dt # Numerical integration (Euler step): update joint angles
@@ -705,6 +743,7 @@ class AutomatedCafe:
 if __name__ == "__main__":
     cafe = AutomatedCafe()
     if "--no-gui" in sys.argv:
+                
         cafe.run()
     else:
         from barista_gui import BaristaGUI
