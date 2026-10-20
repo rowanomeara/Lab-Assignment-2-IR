@@ -51,12 +51,13 @@ class AutomatedCafe:
         self.estop_active = False
         self.sensor_breached = False
         self.is_running = False
+        self.is_paused = False
         self.cup_attached = False
 
         # Guard env.step globally against E-stop and safety sensor pauses
         orig_step = self.env.step
         def guarded_step(dt=0.05):
-            while self.estop_active or self.sensor_breached:
+            while self.estop_active or self.sensor_breached or getattr(self, "is_paused", False):
                 time.sleep(0.05)
             orig_step(dt)
         self.env.step = guarded_step
@@ -400,6 +401,7 @@ class AutomatedCafe:
         self.estop_active = False
         self.sensor_breached = False
         self.is_running = False
+        self.is_paused = False
         self.cup_attached = False
         self.barista.q = np.zeros(6)
         self.dobot.q = self.dobot_q_ready.copy()

@@ -15,6 +15,9 @@ class BaristaGUI:
         self.root.lift()
         self.root.focus_force()
 
+        if not hasattr(self.cafe, "is_paused"):
+            self.cafe.is_paused = False
+
         # Top status banner showing current state
         self.status = tk.Label(self.root, text="READY", bg="#2e7d32", fg="white", font=("Arial", 11, "bold"))
         self.status.pack(fill=tk.X, padx=5, pady=5)
@@ -45,13 +48,14 @@ class BaristaGUI:
         tk.Button(sf, text="🛑 E-STOP", bg="#d32f2f", fg="white", font=("Arial", 10, "bold"), command=self.estop).pack(fill=tk.X, pady=2)
         tk.Button(sf, text="Reset", command=self.reset).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=1)
         tk.Button(sf, text="Curtain", command=self.curtain).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=1)
-        tk.Button(sf, text="▶ Run", bg="#1976d2", fg="white", command=self.run_seq).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=1)
+        self.run_btn = tk.Button(sf, text="▶ Run", bg="#1976d2", fg="white", command=self.run_seq)
+        self.run_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=1)
 
         self._poll()
 
     def jog_joint(self, j, direction):
-        # Don't move if e-stopped, curtain breached, or running auto sequence
-        if self.cafe.estop_active or self.cafe.sensor_breached or getattr(self.cafe, "is_running", False):
+        # Don't move if e-stopped, curtain breached, running auto sequence, or paused
+        if self.cafe.estop_active or self.cafe.sensor_breached or getattr(self.cafe, "is_running", False) or getattr(self.cafe, "is_paused", False):
             return
         q = self.cafe.barista.q.copy()
         q[j] += np.deg2rad(5 * direction)
@@ -61,8 +65,8 @@ class BaristaGUI:
         self.cafe.env.step(0.02)
 
     def jog_cart(self, axis_idx, direction):
-        # Don't move if e-stopped, curtain breached, or running auto sequence
-        if self.cafe.estop_active or self.cafe.sensor_breached or getattr(self.cafe, "is_running", False):
+        # Don't move if e-stopped, curtain breached, running auto sequence, or paused
+        if self.cafe.estop_active or self.cafe.sensor_breached or getattr(self.cafe, "is_running", False) or getattr(self.cafe, "is_paused", False):
             return
         delta = [0, 0, 0]
         delta[axis_idx] = 0.01 * direction
@@ -76,6 +80,7 @@ class BaristaGUI:
     def estop(self):
         # Freeze the robot right away
         self.cafe.estop_active = True
+        self.cafe.is_paused = True
         self._update_status()
 
     def reset(self):
@@ -84,6 +89,7 @@ class BaristaGUI:
             return
         self.cafe.estop_active = False
         if not getattr(self.cafe, "is_running", False):
+            self.cafe.is_paused = False
             self.cafe.reset_simulation()
         self._update_status()
 
@@ -93,10 +99,20 @@ class BaristaGUI:
         self._update_status()
 
     def run_seq(self):
-        # Run the full coffee routine on a background thread so GUI doesn't freeze
-        if getattr(self.cafe, "is_running", False) or self.cafe.estop_active or self.cafe.sensor_breached:
+        # Cannot run or resume if e-stopped or light curtain breached
+        if self.cafe.estop_active or self.cafe.sensor_breached:
             return
+
+        # If already running but paused (armed/acknowledged state), resume motion
+        if getattr(self.cafe, "is_running", False):
+            if getattr(self.cafe, "is_paused", False):
+                self.cafe.is_paused = False
+                self._update_status()
+            return
+
+        # Otherwise start the automated sequence from idle
         self.cafe.is_running = True
+        self.cafe.is_paused = False
         self._update_status()
 
         def thread_task():
@@ -104,6 +120,7 @@ class BaristaGUI:
                 self.cafe.run_sequence()
             finally:
                 self.cafe.is_running = False
+                self.cafe.is_paused = False
 
         threading.Thread(target=thread_task, daemon=True).start()
 
@@ -112,10 +129,17 @@ class BaristaGUI:
             self.status.config(text="E-STOPPED", bg="#d32f2f")
         elif self.cafe.sensor_breached:
             self.status.config(text="CURTAIN BREACHED", bg="#f57c00")
+        elif getattr(self.cafe, "is_running", False) and getattr(self.cafe, "is_paused", False):
+            self.status.config(text="ACKNOWLEDGED / PAUSED", bg="#f57c00")
         elif getattr(self.cafe, "is_running", False):
             self.status.config(text="RUNNING", bg="#1976d2")
         else:
             self.status.config(text="READY", bg="#2e7d32")
+
+        if getattr(self.cafe, "is_running", False) and getattr(self.cafe, "is_paused", False):
+            self.run_btn.config(text="▶ Resume")
+        else:
+            self.run_btn.config(text="▶ Run")
 
     def _poll(self):
         # Update telemetry labels and status banner every 100ms
