@@ -365,28 +365,6 @@ class AutomatedCafe:
         self.bottle.T = SE3(-0.15, -0.05, 0.97 + 0.1)
         self.env.add(self.bottle)
 
-        # Visual bounding box
-        r_box = getattr(self.bottle, 'radius', 0.045) + 0.02
-        h_box = getattr(self.bottle, 'length', 0.15) + 0.04
-        self.bottle_bbox = Box(scale=[2 * r_box, 2 * r_box, h_box], color=[1.0, 0.2, 0.2, 0.25])
-        self.bottle_bbox.T = self.bottle.T
-        self.env.add(self.bottle_bbox)
-
-    @property
-    def obstacle_box(self):
-        """Dynamic axis-aligned bounding box [xmin, xmax, ymin, ymax, zmin, zmax] sticking to bottle."""
-        p = SE3(self.bottle.T).t
-        r = getattr(self.bottle, 'radius', 0.045) + 0.02
-        h = getattr(self.bottle, 'length', 0.15) / 2 + 0.02
-        return [p[0] - r, p[0] + r, p[1] - r, p[1] + r, p[2] - h, p[2] + h]
-
-    def move_obstacle(self, x, y, z=None):
-        """Move the obstacle bottle and automatically snap the visual bounding box to it."""
-        z = (0.97 + 0.075) if z is None else z
-        self.bottle.T = SE3(x, y, z)
-        if hasattr(self, 'bottle_bbox'):
-            self.bottle_bbox.T = self.bottle.T
-
     def update_safety_visuals(self):
         """No-op: Swift WebSocket protocol does not support dynamic mesh color updates."""
         pass
@@ -490,10 +468,6 @@ class AutomatedCafe:
         ik_present = self.barista.ikine_LM(ee_target, q0=self.barista.q)
         
         # Collision Avoidance
-        # Snap the visual bounding box to wherever the bottle currently sits
-        if hasattr(self, 'bottle_bbox'):
-            self.bottle_bbox.T = self.bottle.T
-
         # Get bottle location and build a safety box around it (radius + height + cup buffer)
         p_obs = SE3(self.bottle.T).t                            # Obstacle center [x, y, z] in world frame
         r_obs = getattr(self.bottle, 'radius', 0.045) + 0.06    # Obstacle radius + cup clearance
@@ -578,10 +552,6 @@ class AutomatedCafe:
         ik_retract = self.barista.ikine_LM(ee_hover, q0=ik_serve.q)
 
         # Collision Avoidance  
-        # Update visual bounding box transform to match obstacle
-        if hasattr(self, 'bottle_bbox'):
-            self.bottle_bbox.T = self.bottle.T
-
         # Extract obstacle position and compute bounding box with safety margins
         p_obs = SE3(self.bottle.T).t                            # Obstacle center [x, y, z] in world frame
         r_obs = getattr(self.bottle, 'radius', 0.045) + 0.06    # Obstacle radius + safety clearance
