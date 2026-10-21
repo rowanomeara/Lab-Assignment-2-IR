@@ -93,6 +93,11 @@ class AutomatedCafe:
         tabletop.T = SE3(-0.6, -0.2, 0.49)
         self.env.add(tabletop)
 
+        # Counter Extension
+        counter_extension = Box(scale=[0.63, 0.53, 0.97], color=[0.8, 0.8, 0.8, 1.0])
+        counter_extension.T = SE3(-1.185, -1.565, 0.485)
+        self.env.add(counter_extension)
+
         #Coffee Machine
         machine_path = os.path.join(base_path, "Workcell meshes", "Coffee Machine", "machine.stl")
         self.coffee_machine = Mesh(machine_path, color=[0.2, 0.2, 0.2, 1.0])
@@ -276,8 +281,8 @@ class AutomatedCafe:
         curtain_barista_p2.T = SE3(0.75, 0.80, 0.97)
         self.env.add(curtain_barista_p2)
 
-        beam_barista = Box(scale=[0.01, 0.75, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_barista.T = SE3(0.75, 0.425, 1.15)
+        beam_barista = Box(scale=[0.01, 0.75, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_barista.T = SE3(0.75, 0.425, 1.36)
         self.env.add(beam_barista)
 
         # Barista Light Curtain (covering full outer flank side of counter and bench)
@@ -289,21 +294,21 @@ class AutomatedCafe:
         curtain_flank_p2.T = SE3(-1.45, 0.86, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_flank_p2)
 
-        beam_flank = Box(scale=[2.19, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_flank.T = SE3(-0.355, 0.86, 1.15)
+        beam_flank = Box(scale=[2.19, 0.01, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_flank.T = SE3(-0.355, 0.86, 1.36)
         self.env.add(beam_flank)
 
-        # Side Wing Light Curtain (covering full side counter wing)
+        # Side Wing Light Curtain (covering full side counter wing to the end of the bench)
         curtain_wing_p1 = part_mesh("SafetyLightCurtain")
         curtain_wing_p1.T = SE3(0.18, -1.75, 0.97) * SE3.Rz(pi/2)
         self.env.add(curtain_wing_p1)
 
         curtain_wing_p2 = part_mesh("SafetyLightCurtain")
-        curtain_wing_p2.T = SE3(-0.80, -1.75, 0.97) * SE3.Rz(-pi/2)
+        curtain_wing_p2.T = SE3(-1.45, -1.75, 0.97) * SE3.Rz(-pi/2)
         self.env.add(curtain_wing_p2)
 
-        beam_wing = Box(scale=[0.98, 0.01, 0.35], color=[0.0, 0.8, 1.0, 0.25])
-        beam_wing.T = SE3(-0.31, -1.75, 1.15)
+        beam_wing = Box(scale=[1.63, 0.01, 0.76], color=[0.0, 0.8, 1.0, 0.25])
+        beam_wing.T = SE3(-0.635, -1.75, 1.36)
         self.env.add(beam_wing)
 
         # Keep beams together safety updates
