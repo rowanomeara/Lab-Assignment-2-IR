@@ -18,6 +18,14 @@ class BaristaGUI:
         if not hasattr(self.cafe, "is_paused"):
             self.cafe.is_paused = False
 
+        # Physical Xbox controller for E-Stop
+        try:
+            import pygame
+            pygame.init()
+            self.joy = pygame.joystick.Joystick(0) if pygame.joystick.get_count() > 0 else None
+        except Exception:
+            self.joy = None
+
         # Top status banner showing current state
         self.status = tk.Label(self.root, text="READY", bg="#2e7d32", fg="white", font=("Arial", 11, "bold"))
         self.status.pack(fill=tk.X, padx=5, pady=5)
@@ -142,6 +150,13 @@ class BaristaGUI:
             self.run_btn.config(text="▶ Run")
 
     def _poll(self):
+        # Check physical Xbox controller E-Stop (B button)
+        if self.joy:
+            import pygame
+            pygame.event.pump()
+            if self.joy.get_button(1):
+                self.estop()
+
         # Update telemetry labels and status banner every 100ms
         try:
             self._update_status()
