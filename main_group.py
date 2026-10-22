@@ -13,7 +13,8 @@ from ir_support.robots import DobotMagician
 from ir_support_extra_parts.parts import part_mesh
 
 # Ensure repository root is on sys.path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "Jonas" else SCRIPT_DIR
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -351,6 +352,27 @@ class AutomatedCafe:
         fire_ext.T = SE3(-1.68, -1.0, 1.27)
         self.env.add(fire_ext)
 
+       
+        # VIVA OBSTACLE POSITIONS & TEST SCENARIOS
+
+        # --- Baker (Doosan M0609) Obstacle Options ---
+        # 1. Mid-Flight (Default): Triggers standard elevated detour arc
+        #    self.baker_obstacle.T = SE3(-0.28, -0.78, 1.05)
+        # 2. Early-Flight (Near Display Case): Triggers climb immediately after lift
+        #    self.baker_obstacle.T = SE3(-0.20, -1.05, 1.05)
+        # 3. Late-Flight (Near Serving Tray): Detours right before plate drop
+        #    self.baker_obstacle.T = SE3(-0.34, -0.52, 1.05)
+        # 4. Clear Path Test (Tutor Trap): Offset sideways; proves robot detects
+        #    path is clear and takes fast nominal route without unnecessary detour!
+        #    self.baker_obstacle.T = SE3(-0.10, -0.78, 1.05)  # Front side
+        #    self.baker_obstacle.T = SE3(-0.48, -0.78, 1.05)  # Back wall side
+        #
+        # --- Barista (ABB IRB 120) Obstacle Options ---
+        # 1. Mid-Transit (Default): self.bottle.T = SE3(-0.15, -0.05, 1.07)
+        # 2. Near Dobot Handover:  self.bottle.T = SE3(-0.22,  0.08, 1.07)
+        # 3. Clear Path (Off-Path): self.bottle.T = SE3( 0.10, -0.05, 1.07)
+     
+     
         # Baker Obstacle
         self.baker_obstacle = Cylinder(radius=0.045, length=0.20, color=[0.85, 0.25, 0.2, 0.85])
         self.baker_obstacle.T = SE3(-0.28, -0.78, 1.05)
@@ -832,16 +854,19 @@ class AutomatedCafe:
         print("[Baker] Baked roll placed on plate atop serving tray :)")
         self.roll_attached = False
 
-        # Step 7: RMRC Retract & Return Home
+        # Step 7: RMRC Retract & Return Home (Rotated away to clear Service Robot workspace)
         print("--- [Baker] 7. Retract & Return Home ---")
         self.baker_rmrc_straight_line(T_hover_plate, steps=15)
 
-        q_home = np.array([0.0, -pi/6, -pi/2, 0.0, pi/3, 0.0])
+        # Finish position to not interfere with service robot:
+        # q: [65.0, 0.0, -30.0, 0.0, 60.0, 0.0] deg -> Pos: X:-0.497 Y:-0.778 Z:+1.730
+        q_home = np.array([65.0 * pi / 180.0, 0.0, -pi / 6.0, 0.0, pi / 3.0, 0.0])
         traj_home = jtraj(self.baker.q, q_home, 25)
         for q in traj_home.q:
             self.baker.q = q
             self.env.step(0.05)
-        print("[Baker] Returned to Home Configuration. Sequence Completed Successfully!\n")
+        print("[Baker] Returned to Clear Home Position: q=[65.0, 0.0, -30.0, 0.0, 60.0, 0.0] deg (Pos: X:-0.497 Y:-0.778 Z:+1.730).")
+        print("[Baker] Sequence Completed Successfully - Service Robot Workspace Clear!\n")
 
 
     # STAUBLI CONTROL (RMRC, IBVS, OBSTACLE COLLISION AVOIDANCE)
