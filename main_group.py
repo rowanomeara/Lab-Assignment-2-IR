@@ -56,7 +56,7 @@ class AutomatedCafe:
         # Guard env.step globally against E-stop and safety sensor pauses
         orig_step = self.env.step
         def guarded_step(dt=0.05):
-            while self.estop_active or self.sensor_breached or getattr(self, "is_paused", False):
+            while self.estop_active or self.curtain_breached or getattr(self, "is_paused", False):
                 time.sleep(0.05)
             orig_step(dt)
         self.env.step = guarded_step
@@ -367,6 +367,11 @@ class AutomatedCafe:
         self.env.add(warning_sign)
 
 
+    @property
+    def curtain_breached(self):
+        """True if manual curtain toggle is active or robot reaches outside cell"""
+        return self.sensor_breached or (self.baker.fkine(self.baker.q).t[1] < -1.70)
+
     def press_physical_estop(self):
         """Simulates physical E-stop push button press."""
         self.estop_active = True
@@ -409,7 +414,7 @@ class AutomatedCafe:
         for k in range(steps):
             T_curr = self.barista.fkine(self.barista.q)
             
-            # Closed-loop velocity: remaining distance / remaining time (eliminates undershoot)
+            # Closed-loop velocity: remaining distance / remaining time (to eliminate undershoot)
             rem_time = max((steps - k) * dt, dt)
             v_lin = (p_goal - np.array(T_curr.t)) / rem_time
             xdot = np.hstack((v_lin, np.zeros(3)))

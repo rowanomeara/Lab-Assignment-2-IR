@@ -120,9 +120,10 @@ class GroupGUI:
         self._update_status()
 
     def reset(self):
-        if self.cafe.sensor_breached:
+        if self.cafe.curtain_breached and getattr(self.cafe, "is_running", False):
             return
         self.cafe.estop_active = False
+        self.cafe.sensor_breached = False
         if not getattr(self.cafe, "is_running", False):
             self.cafe.is_paused = False
             self.cafe.reset_simulation()
@@ -135,7 +136,7 @@ class GroupGUI:
         self._update_status()
 
     def run_seq(self):
-        if self.cafe.estop_active or self.cafe.sensor_breached:
+        if self.cafe.estop_active or self.cafe.curtain_breached:
             return
 
         if getattr(self.cafe, "is_running", False):
@@ -160,7 +161,7 @@ class GroupGUI:
     def _update_status(self):
         if self.cafe.estop_active:
             self.status.config(text="E-STOPPED", bg="#d32f2f")
-        elif self.cafe.sensor_breached:
+        elif self.cafe.curtain_breached:
             self.status.config(text="CURTAIN BREACHED", bg="#f57c00")
         elif getattr(self.cafe, "is_running", False) and getattr(self.cafe, "is_paused", False):
             self.status.config(text="ACKNOWLEDGED / PAUSED", bg="#f57c00")
