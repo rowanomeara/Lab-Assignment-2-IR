@@ -102,12 +102,13 @@ class AutomatedCafe:
         self.dobot = DobotMagician(base=dobot_base)
         self.dobot.base = dobot_base
         
-        # Level jug orientation for Dobot
-        q2_ready = 25 * pi / 180
-        q3_ready = 20 * pi / 180
-        q4_level = -(q2_ready + q3_ready)
-        self.dobot_q_ready = np.array([0.0, q2_ready, q3_ready, q4_level, 0.0])
-        self.dobot.q = self.dobot_q_ready
+        # Multi-axis calibrated waypoints for Dobot Magician (matching physical hardware)
+        deg = pi / 180
+        self.dobot_q_park  = np.array([-35 * deg, 25 * deg, 20 * deg, -45 * deg, 0.0])
+        self.dobot_q_ready = np.array([  0.0,     25 * deg, 20 * deg, -45 * deg, 0.0])
+        self.dobot_q_reach = np.array([  0.0,     45 * deg, 35 * deg, -80 * deg, 0.0])
+        self.dobot_q_pour  = np.array([  0.0,     48 * deg, 35 * deg, -52 * deg, 0.0])
+        self.dobot.q = self.dobot_q_park.copy()
         
         # Counter Top
         counter_path = os.path.join(base_path, "Workcell meshes", "Counter", "counter.stl")
@@ -382,7 +383,7 @@ class AutomatedCafe:
         self.is_paused = False
         self.cup_attached = False
         self.barista.q = np.zeros(6)
-        self.dobot.q = self.dobot_q_ready.copy()
+        self.dobot.q = self.dobot_q_park.copy()
         self.jug.T = self.dobot.fkine(self.dobot.q) * self.jug_offset
         self.cup.T = SE3(0, 0.6, 0.97)
         if hasattr(self, 'coffee'):
@@ -512,24 +513,28 @@ class AutomatedCafe:
         print("Cup presented to Dobot for milk :)")
 
     def dobot_pour_milk(self):
+        """
+        Execute calibrated multi-axis Dobot milk pouring sequence:
+        1. Swing base from parked wait pose (-35°) to center (0°)
+        2. Extend arm forward horizontally over the receiving cup
+        3. Tilt wrist down (+28°) & lean forward to pour milk smoothly
+        4. Liquid cutoff and tilt back level
+        5. Retract arm and swing back to park pose
+        """
         def move(q_target, steps):
             for q in jtraj(self.dobot.q, q_target, steps).q:
                 self.dobot.q = q
                 self.jug.T = self.dobot.fkine(self.dobot.q) * self.jug_offset
                 self.env.step(0.05)
 
-        T_cup_rim = (SE3(self.cup.T) * SE3(-0.05, 0.0, 0.125)).t
-        T_ee_target = SE3(T_cup_rim - [0.156, 0.0, 0.080]) * SE3.Rx(pi)
+        # 1. Base swing: park (-35°) -> center (0°)
+        move(self.dobot_q_ready, 20)
 
-        sol_reach = self.dobot.ikine_LM(T_ee_target, q0=self.dobot.q, mask=[1, 1, 1, 0, 0, 0])
-        q_reach = sol_reach.q.copy()
-        q_reach[3] = -(q_reach[1] + q_reach[2])
+        # 2. Horizontal reach forward over the cup
+        move(self.dobot_q_reach, 25)
 
-        move(q_reach, 20)
-
-        q_pour = q_reach.copy()
-        q_pour[3] += 25 * pi / 180
-        move(q_pour, 15)
+        # 3. Tilt wrist down to pour
+        move(self.dobot_q_pour, 15)
 
         if not hasattr(self, 'milk'):
             self.milk = Cylinder(radius=0.058, length=0.015, color=[0.55, 0.36, 0.20, 1.0])
@@ -537,8 +542,17 @@ class AutomatedCafe:
         self.milk.T = SE3(self.cup.T) * SE3(0, 0, 0.088)
         print("Dobot poured milk into the cup <3")
 
-        move(q_reach, 15)
+        for _ in range(20):
+            self.env.step(0.05)
+
+        # 4. Tilt back level (liquid cutoff)
+        move(self.dobot_q_reach, 15)
+
+        # 5. Retract horizontally to ready pose
         move(self.dobot_q_ready, 20)
+
+        # 6. Swing base back to park pose (-35°)
+        move(self.dobot_q_park, 20)
         
     def barista_serve_coffee(self):
         target_cup = SE3(self.tray.T) * SE3(0.08, 0.0, 0.03)

@@ -11,8 +11,6 @@ I made this calculator to derive the offset matrices to map
 the CAD meshes onto DH coordinate frames
 Here is how you use it...
 
-antigravity made ts im crine bruh
-
 1. Get the DH parameters for your robot from a textbook or something
 2. Stack SE3 matrix distances to build your physical robot (From the manufacturer specsheet/URDF)
 3. Let the calc find the offset (offset = Inverse(DH_Frame) * CAD_Frame)
@@ -56,9 +54,7 @@ T_cad = [
 # CALCULATE THE OFFSETS
 
 def calculate_offsets(robot_name, dh_links, T_cad):
-    print(f"========================================")
-    print(f" OFFSETS FOR {robot_name}")
-    print(f"========================================")
+    print(f" OFFSETS")
     robot = DHRobot(dh_links)
     T_dh_global = SE3()
     for i in range(len(dh_links)):
