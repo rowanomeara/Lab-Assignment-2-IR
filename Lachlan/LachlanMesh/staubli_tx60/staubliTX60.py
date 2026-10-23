@@ -61,7 +61,7 @@ class StaubliTX60(DHRobot):
         ]
 
         staubli_yellow = (1.0, 0.7, 0.0, 1.0)
-        staubli_gray = (0.3, 0.3, 0.3, 1.0)
+        staubli_silver = (0.78, 0.78, 0.8, 1.0)
 
         def load_geom(filename, T_offset, color=staubli_yellow):
             mesh_path = os.path.join(mesh_dir, filename)
@@ -75,11 +75,16 @@ class StaubliTX60(DHRobot):
         self.base_link_mesh = load_geom("base_link.stl", np.eye(4), color=staubli_yellow)
 
         for i in range(6):
-            m = load_geom(f"link_{i+1}.stl", offsets[i])
-            if i == 5 and m is not None:
-                m.color = staubli_gray
-            self.links[i].geometry = [m] if m else []
-            self.links[i].collision = [load_geom(f"link_{i+1}.stl", offsets[i])] if m else []
+            if i == 3 and os.path.exists(os.path.join(mesh_dir, "link_4_forearm.stl")):
+                m_body = load_geom("link_4_forearm.stl", offsets[3], color=staubli_yellow)
+                m_wrist = load_geom("link_4_wrist.stl", offsets[3], color=staubli_silver)
+                self.links[3].geometry = [m_body, m_wrist]
+                self.links[3].collision = [load_geom(f"link_{i+1}.stl", offsets[i])]
+            else:
+                c = staubli_silver if i >= 4 else staubli_yellow
+                m = load_geom(f"link_{i+1}.stl", offsets[i], color=c)
+                self.links[i].geometry = [m] if m else []
+                self.links[i].collision = [load_geom(f"link_{i+1}.stl", offsets[i], color=c)] if m else []
 
     def _update_link_tf(self, q=None):
         super(DHRobot, self)._update_link_tf(q)
